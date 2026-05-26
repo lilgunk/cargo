@@ -122,7 +122,8 @@ function VanSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicle })
 }
 
 // ─── 2D top-view SVG ─────────────────────────────────────────────────────────
-const TOP_OX = 80, TOP_OY = 15, TOP_W = 400, TOP_H = 140;
+// Cargo hold spans x=80..410 (330px wide) and y=15..155 (140px tall) in SVG coords.
+const TOP_OX = 80, TOP_OY = 15, TOP_W = 330, TOP_H = 140;
 
 function TopViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicle }) {
   const scaleX = TOP_W / vehicle.length;
@@ -130,22 +131,29 @@ function TopViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicl
 
   return (
     <svg viewBox="0 0 460 170" className="w-full h-full max-h-36">
+      <defs>
+        <clipPath id="topCargoClip">
+          <rect x={TOP_OX} y={TOP_OY} width={TOP_W} height={TOP_H} />
+        </clipPath>
+      </defs>
       {/* Van outline */}
       <rect x="10" y="15" width="400" height="140" rx="4" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
       {/* Cab */}
       <rect x="10" y="15" width="70" height="140" rx="4" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
       <text x="45" y="88" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace" transform="rotate(-90,45,88)">КАБИНА</text>
       {/* Cargo boxes */}
-      {placed.map((u, i) => {
-        const x = TOP_OX + u.x * scaleX;
-        const y = TOP_OY + u.y * scaleY;
-        const w = u.length * scaleX;
-        const h = u.width * scaleY;
-        return (
-          <rect key={i} x={x + 0.5} y={y + 0.5} width={Math.max(1, w - 1)} height={Math.max(1, h - 1)}
-            fill={u.color} fillOpacity="0.55" stroke={u.color} strokeOpacity="0.9" strokeWidth="0.8" />
-        );
-      })}
+      <g clipPath="url(#topCargoClip)">
+        {placed.map((u, i) => {
+          const x = TOP_OX + u.x * scaleX;
+          const y = TOP_OY + u.y * scaleY;
+          const w = u.length * scaleX;
+          const h = u.width * scaleY;
+          return (
+            <rect key={i} x={x + 0.5} y={y + 0.5} width={Math.max(1, w - 1)} height={Math.max(1, h - 1)}
+              fill={u.color} fillOpacity="0.55" stroke={u.color} strokeOpacity="0.9" strokeWidth="0.8" />
+          );
+        })}
+      </g>
       {/* Dimension labels */}
       <text x="230" y="164" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace">
         ← {vehicle.length.toLocaleString()} мм →
