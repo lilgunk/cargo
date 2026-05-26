@@ -1,86 +1,158 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { SAMPLE_CARGO, VEHICLES } from '../data/mockData';
 import type { CargoItem, Vehicle, VehicleId, PlacedUnit } from '../types';
 
 const COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#60a5fa', '#a78bfa', '#fb923c', '#4ade80'];
 
-// Fill cross-section (Y=width, Z=height) first, then advance along X (cab → doors).
-function placeCargo(items: CargoItem[], vehicle: Vehicle): PlacedUnit[] {
-  const result: PlacedUnit[] = [];
-  let curX = 0, curY = 0, curZ = 0;
-  let colMaxX = 0; // deepest item length in current X-column
-  let rowMaxZ = 0; // tallest item in current Y-row
+type Dims = { length: number; width: number; height: number };
 
+// All unique orientations of a box (up to 6 permutations of L/W/H)
+function getAllOrientations(l: number, w: number, h: number): Dims[] {
+  const seen = new Set<string>();
+  return ([
+    [l, w, h], [l, h, w], [w, l, h],
+    [w, h, l], [h, l, w], [h, w, l],
+  ] as [number, number, number][])
+    .map(([a, b, c]) => ({ length: a, width: b, height: c }))
+    .filter(d => {
+      const key = `${d.length},${d.width},${d.height}`;
+      return seen.has(key) ? false : (seen.add(key), true);
+    });
+}
+
+// Extreme Point (EP) bin packing.
+// Instead of splitting space, we track "extreme points" — corners where a new box
+// can start. After each placement 3 new EPs are generated (right / beside / above).
+// Any subsequent box can snap to ANY EP and try all orientations, so it naturally
+// fills L-shaped and staircase gaps that guillotine algorithms leave behind.
+function optimizeCargo(items: CargoItem[], vehicle: Vehicle): PlacedUnit[] {
+  const units: CargoItem[] = [];
   for (const item of items) {
-    for (let q = 0; q < item.quantity; q++) {
-      if (curY + item.width > vehicle.width) {
-        // width full → stack up one level
-        curY = 0;
-        curZ += rowMaxZ;
-        rowMaxZ = 0;
-      }
-      if (curZ + item.height > vehicle.height) {
-        // cross-section full → advance to next depth column
-        curX += colMaxX;
-        curY = 0;
-        curZ = 0;
-        rowMaxZ = 0;
-        colMaxX = 0;
-      }
-      if (curX + item.length > vehicle.length) {
-        return result;
-      }
-      result.push({
-        cargoId: item.id,
-        color: item.color,
-        x: curX, y: curY, z: curZ,
-        length: item.length, width: item.width, height: item.height,
-      });
-      curY += item.width;
-      rowMaxZ = Math.max(rowMaxZ, item.height);
-      colMaxX = Math.max(colMaxX, item.length);
-    }
+    for (let q = 0; q < item.quantity; q++) units.push(item);
   }
+  // Largest volume first — big items claim prime corners first
+  units.sort((a, b) => b.length * b.width * b.height - a.length * a.width * a.height);
+
+  const result: PlacedUnit[] = [];
+  type EP = { x: number; y: number; z: number };
+  const eps: EP[] = [{ x: 0, y: 0, z: 0 }];
+
+  function overlaps(px: number, py: number, pz: number, d: Dims): boolean {
+    return result.some(r =>
+      px < r.x + r.length && px + d.length > r.x &&
+      py < r.y + r.width  && py + d.width  > r.y &&
+      pz < r.z + r.height && pz + d.height > r.z
+    );
+  }
+
+  // A box must rest on the floor (z=0) or on top of another box
+  function isSupported(px: number, py: number, pz: number, d: Dims): boolean {
+    if (pz === 0) return true;
+    return result.some(r =>
+      r.z + r.height === pz &&
+      r.x < px + d.length && r.x + r.length > px &&
+      r.y < py + d.width  && r.y + r.width  > py
+    );
+  }
+
+  for (const item of units) {
+    const orientations = getAllOrientations(item.length, item.width, item.height);
+
+    let bestX = -1, bestY = -1, bestZ = -1;
+    let bestDims: Dims | null = null;
+    let bestScore = Infinity;
+
+    for (const { x, y, z } of eps) {
+      for (const d of orientations) {
+        if (x + d.length > vehicle.length) continue;
+        if (y + d.width  > vehicle.width)  continue;
+        if (z + d.height > vehicle.height) continue;
+        if (overlaps(x, y, z, d)) continue;
+        if (!isSupported(x, y, z, d)) continue;
+
+        // Priority: stay on the floor (z=0) → fill from cab (small x) → fill width (small y)
+        const score = z * 1_000_000 + x * 1_000 + y;
+        if (score < bestScore) {
+          bestScore = score; bestX = x; bestY = y; bestZ = z; bestDims = d;
+        }
+      }
+    }
+
+    if (!bestDims) continue;
+
+    // Gravity: slide the box toward y=0 — find the closest wall or box face blocking in y
+    let finalY = bestY;
+    {
+      let wall = 0;
+      for (const r of result) {
+        if (
+          bestX < r.x + r.length && bestX + bestDims.length > r.x &&
+          bestZ < r.z + r.height && bestZ + bestDims.height > r.z
+        ) {
+          wall = Math.max(wall, r.y + r.width);
+        }
+      }
+      if (wall <= bestY && isSupported(bestX, wall, bestZ, bestDims)) {
+        finalY = wall;
+      }
+    }
+
+    result.push({ cargoId: item.id, color: item.color, x: bestX, y: finalY, z: bestZ, ...bestDims });
+
+    // Three new extreme points generated by this placement
+    eps.push({ x: bestX + bestDims.length, y: finalY,                z: bestZ });
+    eps.push({ x: bestX,                   y: finalY + bestDims.width, z: bestZ });
+    eps.push({ x: bestX,                   y: finalY,                z: bestZ + bestDims.height });
+  }
+
   return result;
 }
 
 export function useCargoStore() {
-  const [vehicleId, setVehicleId] = useState<VehicleId>('large');
+  const [vehicleId, setVehicleIdRaw] = useState<VehicleId>('large');
   const [cargoItems, setCargoItems] = useState<CargoItem[]>(SAMPLE_CARGO);
+  const [placed, setPlaced] = useState<PlacedUnit[]>([]);
 
   const vehicle = VEHICLES.find((v) => v.id === vehicleId) ?? VEHICLES[2];
 
-  function addCargo(fields: { length: number; width: number; height: number; weight: number; quantity: number }) {
+  function setVehicleId(id: VehicleId) {
+    setVehicleIdRaw(id);
+    setPlaced([]);
+  }
+
+  function addCargo(fields: { length: number; width: number; height: number; weight: number; quantity: number }): boolean {
+    const newVolume = fields.length * fields.width * fields.height * fields.quantity;
+    if (usedVolumeMm3 + newVolume > maxVolumeMm3) return false;
     setCargoItems((prev) => {
       const color = COLORS[prev.length % COLORS.length];
-      return [...prev, {
-        id: `cargo-${Date.now()}`,
-        name: `Груз ${prev.length + 1}`,
-        ...fields,
-        color,
-      }];
+      return [...prev, { id: `cargo-${Date.now()}`, name: `Груз ${prev.length + 1}`, ...fields, color }];
     });
+    setPlaced([]);
+    return true;
   }
 
   function removeCargo(id: string) {
     setCargoItems((prev) => prev.filter((c) => c.id !== id));
+    setPlaced([]);
   }
 
-  const placed = useMemo(() => placeCargo(cargoItems, vehicle), [cargoItems, vehicle]);
+  function optimize() {
+    setPlaced(optimizeCargo(cargoItems, vehicle));
+  }
 
-  const totalWeight = cargoItems.reduce((s, c) => s + c.weight * c.quantity, 0);
-  const totalItems = cargoItems.reduce((s, c) => s + c.quantity, 0);
+  const totalWeight   = cargoItems.reduce((s, c) => s + c.weight * c.quantity, 0);
+  const totalItems    = cargoItems.reduce((s, c) => s + c.quantity, 0);
   const usedVolumeMm3 = cargoItems.reduce((s, c) => s + c.length * c.width * c.height * c.quantity, 0);
-  const maxVolumeMm3 = vehicle.length * vehicle.width * vehicle.height;
-  const usedVolume = usedVolumeMm3 / 1e9;
-  const maxVolume = maxVolumeMm3 / 1e9;
-  const freeVolume = Math.max(0, maxVolume - usedVolume);
-  const occupancy = Math.min(100, Math.round((usedVolumeMm3 / maxVolumeMm3) * 100));
+  const maxVolumeMm3  = vehicle.length * vehicle.width * vehicle.height;
+  const usedVolume    = usedVolumeMm3 / 1e9;
+  const maxVolume     = maxVolumeMm3 / 1e9;
+  const freeVolume    = Math.max(0, maxVolume - usedVolume);
+  const occupancy     = Math.min(100, Math.round((usedVolumeMm3 / maxVolumeMm3) * 100));
 
   return {
     vehicleId, setVehicleId,
     cargoItems, addCargo, removeCargo,
-    vehicle, placed,
+    vehicle, placed, optimize,
     totalWeight, totalItems,
     usedVolume, maxVolume, freeVolume, occupancy,
   };

@@ -24,6 +24,10 @@ export const VEHICLES: Vehicle[] = [
     width: 1787,
     height: 1940,
     maxWeight: 1350,
+    images: {
+      front: '/vehicles/sprinter-l3h2-front.png',
+      side:  '/vehicles/sprinter-l3h2-side.png',
+    },
   },
 ];
 

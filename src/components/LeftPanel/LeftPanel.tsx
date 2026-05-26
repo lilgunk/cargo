@@ -70,7 +70,11 @@ export function LeftPanel({ store }: Props) {
       return;
     }
 
-    addCargo({ length: l, width: w, height: h, weight: wt, quantity: qty });
+    const ok = addCargo({ length: l, width: w, height: h, weight: wt, quantity: qty });
+    if (!ok) {
+      setFormError('Не хватает места в кузове (объём превышен)');
+      return;
+    }
     setForm((f) => ({ ...f, qty: '1' }));
   }
 
@@ -106,11 +110,15 @@ export function LeftPanel({ store }: Props) {
 
         {/* Van thumbnails */}
         <div className="flex gap-2 mb-3">
-          <div className="flex-1 aspect-[4/3] bg-gray-50 rounded-lg border border-gray-200 p-1.5">
-            <VanFrontSVG />
+          <div className="flex-1 aspect-[10/9] bg-gray-50 rounded-lg overflow-hidden">
+            {vehicle.images
+              ? <img src={vehicle.images.side} alt="вид сбоку" className="w-full h-full object-contain p-1" />
+              : <div className="p-1.5 w-full h-full"><VanSideSVG /></div>}
           </div>
-          <div className="flex-1 aspect-[4/3] bg-gray-50 rounded-lg border border-gray-200 p-1.5">
-            <VanSideSVG />
+          <div className="flex-1 aspect-[10/9] bg-gray-50 rounded-lg overflow-hidden">
+            {vehicle.images
+              ? <img src={vehicle.images.front} alt="вид спереди" className="w-full h-full object-contain p-1" />
+              : <div className="p-1.5 w-full h-full"><VanFrontSVG /></div>}
           </div>
         </div>
 
