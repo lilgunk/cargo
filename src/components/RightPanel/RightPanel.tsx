@@ -64,7 +64,10 @@ export function RightPanel({ store }: Props) {
         </div>
 
         {/* Optimize button */}
-        <button className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-800 transition-colors">
+        <button
+          onClick={store.optimize}
+          className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-800 transition-colors"
+        >
           <Zap size={13} />
           Запустить оптимизацию
         </button>

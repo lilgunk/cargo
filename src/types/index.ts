@@ -7,6 +7,7 @@ export interface Vehicle {
   width: number;  // mm
   height: number; // mm
   maxWeight: number; // kg
+  images?: { front: string; side: string };
 }
 
 export interface CargoItem {
