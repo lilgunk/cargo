@@ -16,6 +16,9 @@ dist-ssr
 server/node_modules
 server/users.db
 
+# Claude Code
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
