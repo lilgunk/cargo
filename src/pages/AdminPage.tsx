@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, apiUrl } from '../contexts/AuthContext';
 import {
   Users, Trash2, Shield, ShieldOff, ArrowLeft,
   UserCheck, UserPlus, Calendar, Crown,
@@ -46,8 +46,8 @@ export default function AdminPage() {
     setError('');
     try {
       const [usersRes, statsRes] = await Promise.all([
-        fetch('/api/admin/users', { headers: authHeaders() }),
-        fetch('/api/admin/stats', { headers: authHeaders() }),
+        fetch(apiUrl('/api/admin/users'), { headers: authHeaders() }),
+        fetch(apiUrl('/api/admin/stats'), { headers: authHeaders() }),
       ]);
       if (usersRes.status === 403) { setError('Нет доступа'); setLoading(false); return; }
       const usersData = await usersRes.json();
@@ -65,7 +65,7 @@ export default function AdminPage() {
     if (!confirm('Удалить пользователя?')) return;
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/admin/users/${id}`, {
+      const res = await fetch(apiUrl(`/api/admin/users/${id}`), {
         method: 'DELETE',
         headers: authHeaders(),
       });
@@ -84,7 +84,7 @@ export default function AdminPage() {
     const newRole = u.role === 'admin' ? 'user' : 'admin';
     setTogglingId(u.id);
     try {
-      const res = await fetch(`/api/admin/users/${u.id}/role`, {
+      const res = await fetch(apiUrl(`/api/admin/users/${u.id}/role`), {
         method: 'PATCH',
         headers: authHeaders(),
         body: JSON.stringify({ role: newRole }),
