@@ -1,11 +1,16 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
-interface User {
-  id: number;
+export interface User {
+  id: string;
   name: string;
   email: string;
   role: 'admin' | 'user';
+  createdAt: string;
+}
+
+interface StoredUser extends User {
+  password: string;
 }
 
 interface AuthContextType {
@@ -18,21 +23,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const ADMIN_EMAIL = 'admin@loadopti.com';
+const USERS_KEY = 'lo_users';
+const SESSION_KEY = 'lo_session';
 
-async function apiFetch(path: string, body?: object) {
-  const res = await fetch(API_BASE + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Ошибка сервера');
-  return data;
+function getUsers(): StoredUser[] {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]'); } catch { return []; }
 }
-
-export function apiUrl(path: string) {
-  return API_BASE + path;
+function saveUsers(users: StoredUser[]) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -40,29 +39,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
-    fetch(apiUrl('/api/auth/me'), { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => { if (data.user) setUser(data.user); })
-      .catch(() => localStorage.removeItem('token'))
-      .finally(() => setLoading(false));
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) {
+      try { setUser(JSON.parse(raw)); } catch { localStorage.removeItem(SESSION_KEY); }
+    }
+    setLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
-    const data = await apiFetch('/api/auth/login', { email, password });
-    localStorage.setItem('token', data.token);
-    setUser(data.user);
+    const users = getUsers();
+    const found = users.find(u => u.email === email);
+    if (!found || found.password !== password) {
+      throw new Error('Неверный email или пароль');
+    }
+    const { password: _, ...session } = found;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const data = await apiFetch('/api/auth/register', { name, email, password });
-    localStorage.setItem('token', data.token);
-    setUser(data.user);
+    const users = getUsers();
+    if (users.find(u => u.email === email)) {
+      throw new Error('Email уже зарегистрирован');
+    }
+    const newUser: StoredUser = {
+      id: crypto.randomUUID(),
+      name,
+      email,
+      password,
+      role: email === ADMIN_EMAIL ? 'admin' : 'user',
+      createdAt: new Date().toISOString(),
+    };
+    saveUsers([...users, newUser]);
+    const { password: _, ...session } = newUser;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem(SESSION_KEY);
     setUser(null);
   };
 

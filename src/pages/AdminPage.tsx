@@ -1,102 +1,52 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, apiUrl } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import type { User } from '../contexts/AuthContext';
 import {
   Users, Trash2, Shield, ShieldOff, ArrowLeft,
   UserCheck, UserPlus, Calendar, Crown,
 } from 'lucide-react';
 
-interface UserRow {
-  id: number;
-  name: string;
-  email: string;
-  role: 'admin' | 'user';
-  created_at: string;
+interface StoredUser extends User {
+  password: string;
 }
 
-interface Stats {
-  total: number;
-  admins: number;
-  recent: number;
-  latest: { name: string; email: string; created_at: string }[];
-}
+const USERS_KEY = 'lo_users';
 
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+function getUsers(): StoredUser[] {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]'); } catch { return []; }
+}
+function saveUsers(users: StoredUser[]) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [users, setUsers] = useState<StoredUser[]>([]);
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  useEffect(() => { setUsers(getUsers()); }, []);
 
-  async function fetchAll() {
-    setLoading(true);
-    setError('');
-    try {
-      const [usersRes, statsRes] = await Promise.all([
-        fetch(apiUrl('/api/admin/users'), { headers: authHeaders() }),
-        fetch(apiUrl('/api/admin/stats'), { headers: authHeaders() }),
-      ]);
-      if (usersRes.status === 403) { setError('Нет доступа'); setLoading(false); return; }
-      const usersData = await usersRes.json();
-      const statsData = await statsRes.json();
-      setUsers(usersData.users ?? []);
-      setStats(statsData);
-    } catch {
-      setError('Ошибка загрузки данных');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const total = users.length;
+  const admins = users.filter(u => u.role === 'admin').length;
+  const recent = users.filter(u => {
+    const d = new Date(u.createdAt);
+    return Date.now() - d.getTime() < 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
-  async function deleteUser(id: number) {
+  function deleteUser(id: string) {
     if (!confirm('Удалить пользователя?')) return;
-    setDeletingId(id);
-    try {
-      const res = await fetch(apiUrl(`/api/admin/users/${id}`), {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setUsers(prev => prev.filter(u => u.id !== id));
-      if (stats) setStats({ ...stats, total: stats.total - 1 });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setDeletingId(null);
-    }
+    const updated = getUsers().filter(u => u.id !== id);
+    saveUsers(updated);
+    setUsers(updated);
   }
 
-  async function toggleRole(u: UserRow) {
+  function toggleRole(u: StoredUser) {
     const newRole = u.role === 'admin' ? 'user' : 'admin';
-    setTogglingId(u.id);
-    try {
-      const res = await fetch(apiUrl(`/api/admin/users/${u.id}/role`), {
-        method: 'PATCH',
-        headers: authHeaders(),
-        body: JSON.stringify({ role: newRole }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: newRole } : x));
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setTogglingId(null);
-    }
+    const updated = getUsers().map(x => x.id === u.id ? { ...x, role: newRole as 'admin' | 'user' } : x);
+    saveUsers(updated);
+    setUsers(updated);
   }
 
   function formatDate(s: string) {
@@ -107,7 +57,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -126,10 +75,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-slate-400 text-sm">{user?.name}</span>
-            <button
-              onClick={logout}
-              className="text-slate-500 hover:text-red-400 transition-colors text-sm"
-            >
+            <button onClick={logout} className="text-slate-500 hover:text-red-400 transition-colors text-sm">
               Выйти
             </button>
           </div>
@@ -137,67 +83,26 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
-            {error}
-          </div>
-        )}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard icon={<Users size={20} className="text-indigo-400" />} label="Всего пользователей" value={total} color="indigo" />
+          <StatCard icon={<Crown size={20} className="text-amber-400" />} label="Администраторов" value={admins} color="amber" />
+          <StatCard icon={<UserPlus size={20} className="text-emerald-400" />} label="За последние 7 дней" value={recent} color="emerald" />
+          <StatCard icon={<UserCheck size={20} className="text-sky-400" />} label="Обычных пользователей" value={total - admins} color="sky" />
+        </div>
 
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={<Users size={20} className="text-indigo-400" />}
-              label="Всего пользователей"
-              value={stats.total}
-              color="indigo"
-            />
-            <StatCard
-              icon={<Crown size={20} className="text-amber-400" />}
-              label="Администраторов"
-              value={stats.admins}
-              color="amber"
-            />
-            <StatCard
-              icon={<UserPlus size={20} className="text-emerald-400" />}
-              label="За последние 7 дней"
-              value={stats.recent}
-              color="emerald"
-            />
-            <StatCard
-              icon={<UserCheck size={20} className="text-sky-400" />}
-              label="Обычных пользователей"
-              value={stats.total - stats.admins}
-              color="sky"
-            />
-          </div>
-        )}
-
-        {/* Users table */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
             <h2 className="font-semibold flex items-center gap-2">
               <Users size={16} className="text-slate-400" />
               Пользователи
-              {!loading && (
-                <span className="ml-1 bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded-full">
-                  {users.length}
-                </span>
-              )}
+              <span className="ml-1 bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded-full">{users.length}</span>
             </h2>
-            <button
-              onClick={fetchAll}
-              className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
-            >
+            <button onClick={() => setUsers(getUsers())} className="text-slate-500 hover:text-slate-300 text-xs transition-colors">
               Обновить
             </button>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <span className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-            </div>
-          ) : users.length === 0 ? (
+          {users.length === 0 ? (
             <div className="text-center py-16 text-slate-500 text-sm">Нет пользователей</div>
           ) : (
             <div className="overflow-x-auto">
@@ -219,9 +124,7 @@ export default function AdminPage() {
                       <td className="px-6 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="w-7 h-7 rounded-full bg-indigo-600/20 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs text-indigo-300 font-semibold">
-                              {u.name.slice(0, 2).toUpperCase()}
-                            </span>
+                            <span className="text-xs text-indigo-300 font-semibold">{u.name.slice(0, 2).toUpperCase()}</span>
                           </div>
                           <span className="text-slate-200 font-medium">{u.name}</span>
                           {u.id === user?.id && (
@@ -236,27 +139,25 @@ export default function AdminPage() {
                             ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
                             : 'bg-slate-700/60 text-slate-400 border border-slate-700'
                         }`}>
-                          {u.role === 'admin' ? <Crown size={10} /> : null}
+                          {u.role === 'admin' && <Crown size={10} />}
                           {u.role === 'admin' ? 'Admin' : 'User'}
                         </span>
                       </td>
-                      <td className="px-6 py-3.5 text-slate-500 text-xs">{formatDate(u.created_at)}</td>
+                      <td className="px-6 py-3.5 text-slate-500 text-xs">{formatDate(u.createdAt)}</td>
                       <td className="px-6 py-3.5">
                         {u.id !== user?.id && (
                           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
                             <button
                               onClick={() => toggleRole(u)}
-                              disabled={togglingId === u.id}
                               title={u.role === 'admin' ? 'Снять admin' : 'Сделать admin'}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-400/10 transition-colors disabled:opacity-40"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
                             >
                               {u.role === 'admin' ? <ShieldOff size={15} /> : <Shield size={15} />}
                             </button>
                             <button
                               onClick={() => deleteUser(u.id)}
-                              disabled={deletingId === u.id}
                               title="Удалить пользователя"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                             >
                               <Trash2 size={15} />
                             </button>
@@ -275,28 +176,14 @@ export default function AdminPage() {
   );
 }
 
-function StatCard({
-  icon, label, value, color,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
+function StatCard({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: number;
   color: 'indigo' | 'amber' | 'emerald' | 'sky';
 }) {
-  const bg = {
-    indigo: 'bg-indigo-500/10 border-indigo-500/20',
-    amber: 'bg-amber-500/10 border-amber-500/20',
-    emerald: 'bg-emerald-500/10 border-emerald-500/20',
-    sky: 'bg-sky-500/10 border-sky-500/20',
-  }[color];
-
+  const bg = { indigo: 'bg-indigo-500/10 border-indigo-500/20', amber: 'bg-amber-500/10 border-amber-500/20', emerald: 'bg-emerald-500/10 border-emerald-500/20', sky: 'bg-sky-500/10 border-sky-500/20' }[color];
   return (
     <div className={`rounded-2xl border p-5 ${bg}`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-xl bg-slate-800/60 flex items-center justify-center">
-          {icon}
-        </div>
-      </div>
+      <div className="w-9 h-9 rounded-xl bg-slate-800/60 flex items-center justify-center mb-3">{icon}</div>
       <div className="text-2xl font-bold text-white">{value}</div>
       <div className="text-slate-400 text-xs mt-1">{label}</div>
     </div>
