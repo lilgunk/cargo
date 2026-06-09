@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FolderOpen,
   Truck,
@@ -6,7 +7,10 @@ import {
   Cpu,
   BarChart2,
   Settings,
+  LogOut,
+  Crown,
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NAV = [
   { id: 'projects', label: 'Проекты', icon: FolderOpen },
@@ -20,6 +24,12 @@ type NavId = (typeof NAV)[number]['id'];
 
 export function NavSidebar() {
   const [active, setActive] = useState<NavId>('projects');
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const initials = user?.name
+    ? user.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()
+    : 'U';
 
   return (
     <aside className="w-44 bg-slate-900 border-r border-slate-800 flex flex-col flex-shrink-0">
@@ -56,17 +66,33 @@ export function NavSidebar() {
 
       {/* Bottom */}
       <div className="px-2 pb-3 border-t border-slate-800 pt-3 space-y-0.5 flex-shrink-0">
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => navigate('/admin')}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 transition-colors"
+          >
+            <Crown size={16} className="flex-shrink-0" />
+            <span className="truncate">Админ</span>
+          </button>
+        )}
         <button className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
           <Settings size={16} className="flex-shrink-0" />
           <span className="truncate">Настройки</span>
         </button>
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+        >
+          <LogOut size={16} className="flex-shrink-0" />
+          <span className="truncate">Выйти</span>
+        </button>
         <div className="flex items-center gap-2.5 px-3 py-2">
-          <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center flex-shrink-0">
-            <span className="text-xs text-slate-300 font-semibold">M</span>
+          <div className="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+            <span className="text-xs text-indigo-300 font-semibold">{initials}</span>
           </div>
           <div className="min-w-0">
-            <div className="text-xs text-slate-300 truncate font-medium">Maksymilian</div>
-            <div className="text-[10px] text-slate-600 truncate">maks@example.com</div>
+            <div className="text-xs text-slate-300 truncate font-medium">{user?.name ?? '—'}</div>
+            <div className="text-[10px] text-slate-600 truncate">{user?.email ?? ''}</div>
           </div>
         </div>
       </div>
