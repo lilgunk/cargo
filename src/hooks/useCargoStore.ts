@@ -136,6 +136,12 @@ export function useCargoStore() {
     setPlaced([]);
   }
 
+  function clearAll(newVehicleId?: VehicleId) {
+    if (newVehicleId) setVehicleIdRaw(newVehicleId);
+    setCargoItems([]);
+    setPlaced([]);
+  }
+
   function optimize() {
     setPlaced(optimizeCargo(cargoItems, vehicle));
   }
@@ -151,7 +157,7 @@ export function useCargoStore() {
 
   return {
     vehicleId, setVehicleId,
-    cargoItems, addCargo, removeCargo,
+    cargoItems, addCargo, removeCargo, clearAll,
     vehicle, placed, optimize,
     totalWeight, totalItems,
     usedVolume, maxVolume, freeVolume, occupancy,
