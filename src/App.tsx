@@ -17,7 +17,7 @@ import {
   FolderOpen, Truck, Package, TrendingUp, Plus, ChevronRight, Bell, X, Check,
   Sun, Moon, Globe,
 } from 'lucide-react';
-import { VEHICLES } from './data/mockData';
+import { vehicleService } from './services/vehicleService';
 import type { VehicleId } from './types';
 
 function NewProjectModal({ onConfirm, onClose }: {
@@ -48,8 +48,8 @@ function NewProjectModal({ onConfirm, onClose }: {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t.modal_vehicle}</label>
             <div className="space-y-2">
-              {VEHICLES.map(v => (
-                <button key={v.id} onClick={() => setVehicleId(v.id as VehicleId)}
+              {vehicleService.getAll().map(v => (
+                <button key={v.id} onClick={() => setVehicleId(v.id)}
                   className={`w-full flex items-center gap-4 p-3 rounded-xl border-2 transition-all text-left ${
                     vehicleId === v.id
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
