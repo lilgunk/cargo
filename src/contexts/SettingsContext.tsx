@@ -20,7 +20,7 @@ const STORAGE_KEY = 'lo_settings';
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [lang, setLangRaw] = useState<Lang>(() => {
     try { return (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}').lang ?? 'pl') as Lang; }
-    catch { return 'ru'; }
+    catch { return 'pl'; }
   });
   const [theme, setThemeRaw] = useState<Theme>(() => {
     try { return (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}').theme ?? 'light') as Theme; }
