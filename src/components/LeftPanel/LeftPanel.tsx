@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, Trash2 } from 'lucide-react';
-import { VEHICLES } from '../../data/mockData';
+import { vehicleService } from '../../services/vehicleService';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
 
@@ -86,7 +86,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
           </button>
           {ddOpen && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden z-20 shadow-lg">
-              {VEHICLES.map(v => (
+              {vehicleService.getAll().map(v => (
                 <button key={v.id} onClick={() => { setVehicleId(v.id); setDdOpen(false); }}
                   className={`w-full text-left px-3 py-2 text-xs transition-colors ${vehicleId === v.id ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                   {v.name}
