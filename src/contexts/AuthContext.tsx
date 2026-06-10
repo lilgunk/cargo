@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
 
 export interface User {
   id: string;
@@ -8,6 +7,10 @@ export interface User {
   email: string;
   role: 'admin' | 'user';
   createdAt: string;
+}
+
+interface StoredUser extends User {
+  password: string;
 }
 
 interface AuthContextType {
@@ -20,14 +23,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-async function fetchProfile(id: string): Promise<User | null> {
-  const { data } = await supabase
-    .from('profiles')
-    .select('id, name, email, role, created_at')
-    .eq('id', id)
-    .single();
-  if (!data) return null;
-  return { id: data.id, name: data.name, email: data.email, role: data.role, createdAt: data.created_at };
+const ADMIN_EMAIL = 'admin@loadopti.com';
+const USERS_KEY = 'lo_users';
+const SESSION_KEY = 'lo_session';
+
+export function getStoredUsers(): StoredUser[] {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]'); } catch { return []; }
+}
+export function saveStoredUsers(users: StoredUser[]) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -35,35 +39,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) setUser(await fetchProfile(session.user.id));
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) setUser(await fetchProfile(session.user.id));
-      else setUser(null);
-    });
-
-    return () => subscription.unsubscribe();
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) {
+      try { setUser(JSON.parse(raw)); } catch { localStorage.removeItem(SESSION_KEY); }
+    }
+    setLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Неверный email или пароль' : error.message);
+    const found = getStoredUsers().find(u => u.email === email);
+    if (!found || found.password !== password) throw new Error('Неверный email или пароль');
+    const { password: _, ...session } = found;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    const users = getStoredUsers();
+    if (users.find(u => u.email === email)) throw new Error('Email уже зарегистрирован');
+    const newUser: StoredUser = {
+      id: crypto.randomUUID(),
+      name,
       email,
       password,
-      options: { data: { name } },
-    });
-    if (error) throw new Error(error.message);
+      role: email === ADMIN_EMAIL ? 'admin' : 'user',
+      createdAt: new Date().toISOString(),
+    };
+    saveStoredUsers([...users, newUser]);
+    const { password: _, ...session } = newUser;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
+  const logout = () => {
+    localStorage.removeItem(SESSION_KEY);
     setUser(null);
   };
 
