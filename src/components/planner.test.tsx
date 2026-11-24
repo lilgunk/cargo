@@ -5,12 +5,14 @@ import { SettingsProvider } from '../contexts/SettingsContext';
 import { useCargoStore } from '../hooks/useCargoStore';
 import { LeftPanel } from './LeftPanel/LeftPanel';
 import { RightPanel } from './RightPanel/RightPanel';
+import { ContainerView } from './ContainerView/ContainerView';
 
 function Planner() {
   const store = useCargoStore();
   return (
     <>
       <LeftPanel store={store} />
+      <ContainerView store={store} />
       <RightPanel store={store} />
     </>
   );
@@ -63,5 +65,20 @@ describe('planner panels', () => {
     fireEvent.change(length, { target: { value: '0' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj ładunek' }).at(-1)!);
     expect(screen.getByText('Podaj wymiary, wagę i ilość większe od zera')).toBeTruthy();
+  });
+});
+
+describe('step-by-step preview', () => {
+  it('walks through the loading steps', async () => {
+    setup();
+    await compute();
+    const text = () => screen.getByText(/^Krok/).textContent;
+    expect(text()).toBe('Krok 14 / 14');
+    fireEvent.click(screen.getByLabelText('Na początek'));
+    expect(text()).toBe('Krok 0 / 14');
+    expect(screen.getByText(/Pusta przestrzeń/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Następny krok'));
+    expect(text()).toBe('Krok 1 / 14');
+    expect(screen.getByText(/bieżący krok/)).toBeTruthy();
   });
 });

@@ -4,6 +4,7 @@ import { vehicleService } from '../services/vehicleService';
 import { DEFAULT_SUPPORT_RATIO, packCargoBest, type BestPlan } from '../algorithm/packCargo';
 import { verifyPacking, type Violation } from '../algorithm/verifyPacking';
 import type { CargoItem, RotationRule, VehicleId } from '../types';
+import type { SavedProject } from '../services/projectService';
 
 const COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#60a5fa', '#a78bfa', '#fb923c', '#4ade80'];
 
@@ -27,7 +28,18 @@ export function useCargoStore() {
   const defaultVehicle = vehicleService.getDefault();
   const [vehicleId, setVehicleIdRaw] = useState<VehicleId>(defaultVehicle.id);
   const [cargoItems, setCargoItems] = useState<CargoItem[]>(SAMPLE_CARGO);
-  const [plan, setPlan] = useState<PlanResult | null>(null);
+  const [plan, setPlanRaw] = useState<PlanResult | null>(null);
+  const [step, setStepRaw] = useState(0);
+
+  // a new plan is shown complete; no plan → step 0
+  function setPlan(p: PlanResult | null) {
+    setPlanRaw(p);
+    setStepRaw(p?.placed.length ?? 0);
+  }
+
+  function setStep(n: number) {
+    setStepRaw(Math.max(0, Math.min(plan?.placed.length ?? 0, n)));
+  }
 
   const vehicle = vehicleService.getById(vehicleId) ?? defaultVehicle;
 
@@ -62,6 +74,18 @@ export function useCargoStore() {
     setPlan(null);
   }
 
+  /** Restores a saved project; the stored plan is re-checked by the verifier. */
+  function loadProject(p: SavedProject) {
+    const v = vehicleService.getById(p.vehicle.id) ?? p.vehicle;
+    setVehicleIdRaw(v.id);
+    setCargoItems(p.cargoItems);
+    setPlan(p.plan && {
+      ...p.plan,
+      violations: verifyPacking(p.cargoItems, v, p.plan.placed, DEFAULT_SUPPORT_RATIO),
+      elapsedMs: 0,
+    });
+  }
+
   function optimize() {
     const t0 = performance.now();
     const best = packCargoBest(cargoItems, vehicle, DEFAULT_SUPPORT_RATIO);
@@ -88,7 +112,7 @@ export function useCargoStore() {
   return {
     vehicleId, setVehicleId,
     cargoItems, addCargo, removeCargo, clearAll, clearPlan,
-    vehicle, plan, placed, unplaced, optimize,
+    vehicle, plan, placed, unplaced, optimize, step, setStep, loadProject,
     totalWeight, totalItems, placedWeight,
     usedVolume, cargoVolume, maxVolume, freeVolume, occupancy,
   };

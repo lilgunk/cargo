@@ -18,6 +18,7 @@ import {
   Sun, Moon, Globe,
 } from 'lucide-react';
 import { vehicleService } from './services/vehicleService';
+import { buildProject, download, planToCsv, projectService, slugify } from './services/projectService';
 import type { VehicleId } from './types';
 
 function NewProjectModal({ onConfirm, onClose }: {
@@ -350,13 +351,49 @@ function DashboardHome({ onNewProject, store }: {
 function CargoApp() {
   const store = useCargoStore();
   const { t } = useSettings();
+  const { user } = useAuth();
+  const userId = user?.id ?? 'anonymous';
   const [activeTab, setActiveTab] = useState('home');
   const [projectName, setProjectName] = useState('');
+  const [projectId, setProjectId] = useState<string>(() => crypto.randomUUID());
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // Restore the most recently saved project once, on start.
+  const [restored, setRestored] = useState(false);
+  if (!restored) {
+    setRestored(true);
+    const latest = projectService.latest(userId);
+    if (latest) {
+      store.loadProject(latest);
+      setProjectName(latest.name);
+      setProjectId(latest.id);
+      setLastSaved(new Date(latest.savedAt));
+    }
+  }
 
   function handleNewProject(name: string, vehicleId: VehicleId) {
     store.clearAll(vehicleId);
     setProjectName(name);
+    setProjectId(crypto.randomUUID());
+    setLastSaved(null);
     setActiveTab('optimization');
+  }
+
+  const name = projectName || t.modal_title;
+
+  function handleSave() {
+    const now = new Date();
+    projectService.save(userId, buildProject(projectId, name, store.vehicle, store.cargoItems, store.plan, now));
+    setLastSaved(now);
+  }
+
+  function handleExportJson() {
+    const project = buildProject(projectId, name, store.vehicle, store.cargoItems, store.plan);
+    download(`${slugify(name)}.loadopti.json`, JSON.stringify(project, null, 2), 'application/json');
+  }
+
+  function handleExportCsv() {
+    if (store.plan) download(`${slugify(name)}-plan.csv`, planToCsv(store.plan), 'text/csv;charset=utf-8');
   }
 
   return (
@@ -370,7 +407,8 @@ function CargoApp() {
             <SettingsView />
           ) : activeTab === 'optimization' ? (
             <>
-              <Header projectName={projectName || t.modal_title} />
+              <Header projectName={name} lastSaved={lastSaved} canExportPlan={!!store.plan}
+                onSave={handleSave} onExportJson={handleExportJson} onExportCsv={handleExportCsv} />
               <div className="flex-1 flex overflow-hidden min-w-0">
                 <LeftPanel store={store} />
                 <ContainerView store={store} />

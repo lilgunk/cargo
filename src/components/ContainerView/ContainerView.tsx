@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { RotateCcw, Maximize2, Eye, Box, Plus, Minus } from 'lucide-react';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import type { PlacedUnit, Vehicle } from '../../types';
+import { StepBar } from '../StepBar/StepBar';
+import { useSettings } from '../../contexts/SettingsContext';
+
+const HIGHLIGHT = '#2563eb';
 
 // ─── SVG constants ────────────────────────────────────────────────────────────
 // 3D side-view canvas
@@ -619,7 +623,11 @@ function PhotoCargoView({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Ve
 type Tab2D = 'top' | 'side' | 'rear';
 
 export function ContainerView({ store }: { store: CargoStore }) {
-  const { placed, vehicle, cargoItems } = store;
+  const { vehicle, cargoItems, step } = store;
+  const { t } = useSettings();
+  // Step-by-step preview: units loaded so far; the last one (current step) is highlighted.
+  const placed = store.placed.slice(0, step).map((u, i, arr) =>
+    i === arr.length - 1 && step < store.placed.length ? { ...u, color: HIGHLIGHT } : u);
   const [tab2d, setTab2d] = useState<Tab2D>('top');
 
   const hasArches = (vehicle.wheelArches?.length ?? 0) > 0;
@@ -658,6 +666,8 @@ export function ContainerView({ store }: { store: CargoStore }) {
         }
       </div>
 
+      <StepBar store={store} />
+
       {/* Legend */}
       <div className="flex items-center justify-center gap-4 pb-2 flex-wrap px-4">
         {cargoItems.map(({ id, color, length, width, height }) => (
@@ -666,6 +676,12 @@ export function ContainerView({ store }: { store: CargoStore }) {
             <span className="text-[11px] text-gray-500 dark:text-slate-400">{length}×{width}×{height} мм</span>
           </div>
         ))}
+        {step > 0 && step < store.placed.length && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: HIGHLIGHT }} />
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">{t.step_highlight}</span>
+          </div>
+        )}
         {hasArches && (
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded flex-shrink-0 bg-slate-300 border border-slate-400" style={{

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, getStoredUsers, saveStoredUsers } from '../contexts/AuthContext';
+import { useAuth, getStoredUsers, saveStoredUsers, toPublicUser } from '../contexts/AuthContext';
 import type { User } from '../contexts/AuthContext';
 import {
   Users, Trash2, Shield, ShieldOff, ArrowLeft,
@@ -22,7 +22,7 @@ export default function AdminPage() {
     setLoading(true);
     const all = getStoredUsers();
     const sorted = [...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setUsers(sorted.map(({ password: _, ...u }) => u as User));
+    setUsers(sorted.map(toPublicUser));
     setLoading(false);
   }
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
+import { hashPassword, verifyPassword } from '../utils/password';
 
 export interface User {
   id: string;
@@ -9,8 +10,17 @@ export interface User {
   createdAt: string;
 }
 
+// Only a PBKDF2 hash and its salt are stored. `password` is the legacy plain-text
+// field of accounts created before hashing; it is replaced on the next login.
 interface StoredUser extends User {
-  password: string;
+  passwordHash?: string;
+  salt?: string;
+  password?: string;
+}
+
+/** User data without any secrets (safe for the session and the UI). */
+export function toPublicUser(u: StoredUser): User {
+  return { id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt };
 }
 
 interface AuthContextType {
@@ -45,9 +55,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading = false;
 
   const login = async (email: string, password: string) => {
-    const found = getStoredUsers().find(u => u.email === email);
-    if (!found || found.password !== password) throw new Error('Неверный email или пароль');
-    const { password: _, ...session } = found;
+    const users = getStoredUsers();
+    const found = users.find(u => u.email === email);
+    const ok = !!found && (found.passwordHash && found.salt
+      ? await verifyPassword(password, { passwordHash: found.passwordHash, salt: found.salt })
+      : found.password === password);
+    if (!found || !ok) throw new Error('Неверный email или пароль');
+    if (!found.passwordHash) {
+      // migrate a legacy plain-text account to a hash
+      const { password: _legacy, ...rest } = found;
+      const hashed = { ...rest, ...(await hashPassword(password)) };
+      saveStoredUsers(users.map(u => (u.id === found.id ? hashed : u)));
+    }
+    const session = toPublicUser(found);
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     setUser(session);
   };
@@ -59,12 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       id: crypto.randomUUID(),
       name,
       email,
-      password,
+      ...(await hashPassword(password)),
       role: email === ADMIN_EMAIL ? 'admin' : 'user',
       createdAt: new Date().toISOString(),
     };
     saveStoredUsers([...users, newUser]);
-    const { password: _, ...session } = newUser;
+    const session = toPublicUser(newUser);
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     setUser(session);
   };

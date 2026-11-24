@@ -25,7 +25,8 @@ const ru = {
 
   // Header
   header_save: 'Сохранить проект', header_export: 'Экспорт',
-  header_last_save: 'Последнее сохранение: сегодня, 14:32',
+  header_last_save: 'Сохранено:', header_not_saved: 'Ещё не сохранён',
+  header_export_json: 'Проект (JSON)', header_export_csv: 'План загрузки (CSV)',
 
   // LeftPanel
   left_vehicle: 'Выбор транспорта', left_length: 'Длина', left_width: 'Ширина',
@@ -51,6 +52,10 @@ const ru = {
   right_optimize: 'Рассчитать укладку', right_optimizing: 'Расчёт...',
   right_placed: 'Размещённые грузы', right_actions: 'Действия',
   right_clear: 'Очистить загрузку', right_report: 'Сгенерировать отчет',
+  step_label: 'Шаг', step_first: 'В начало', step_prev: 'Предыдущий шаг', step_next: 'Следующий шаг', step_last: 'В конец',
+  step_play: 'Воспроизвести', step_pause: 'Пауза', step_empty: 'Пустой кузов — нажмите ▶',
+  step_highlight: 'текущий шаг',
+  support_floor: 'на полу', support_between_arches: 'между арками', support_on_arch: 'на арке', support_stacked: 'на другом грузе',
   right_verified: 'Проверено: 0 нарушений', right_violations: 'Нарушений при проверке',
   right_unplaced: 'Не поместилось', right_all_placed: 'Все грузы размещены',
   right_best_of: 'Лучший из {n} вариантов укладки', right_heuristic_note: 'Результат эвристики: хорошая, но не гарантированно наилучшая укладка.',
@@ -106,7 +111,8 @@ const pl: typeof ru = {
   modal_up_to: 'do', modal_kg: 'kg', modal_m: 'm',
 
   header_save: 'Zapisz projekt', header_export: 'Eksport',
-  header_last_save: 'Ostatni zapis: dzisiaj, 14:32',
+  header_last_save: 'Zapisano:', header_not_saved: 'Jeszcze nie zapisano',
+  header_export_json: 'Projekt (JSON)', header_export_csv: 'Plan załadunku (CSV)',
 
   left_vehicle: 'Wybór pojazdu', left_length: 'Długość', left_width: 'Szerokość',
   left_height: 'Wysokość', left_mm: 'mm', left_capacity: 'Ładowność',
@@ -130,6 +136,10 @@ const pl: typeof ru = {
   right_optimize: 'Rozmieść ładunek', right_optimizing: 'Obliczanie...',
   right_placed: 'Rozmieszczone ładunki', right_actions: 'Działania',
   right_clear: 'Wyczyść załadunek', right_report: 'Generuj raport',
+  step_label: 'Krok', step_first: 'Na początek', step_prev: 'Poprzedni krok', step_next: 'Następny krok', step_last: 'Na koniec',
+  step_play: 'Odtwórz', step_pause: 'Pauza', step_empty: 'Pusta przestrzeń — naciśnij ▶',
+  step_highlight: 'bieżący krok',
+  support_floor: 'na podłodze', support_between_arches: 'między nadkolami', support_on_arch: 'na nadkolu', support_stacked: 'na innym ładunku',
   right_verified: 'Sprawdzono: 0 naruszeń', right_violations: 'Naruszeń przy weryfikacji',
   right_unplaced: 'Nie zmieszczono', right_all_placed: 'Wszystkie ładunki rozmieszczone',
   right_best_of: 'Najlepszy z {n} wariantów ułożenia', right_heuristic_note: 'Wynik heurystyki: dobre, ale nie gwarantowanie najlepsze ułożenie.',
@@ -183,7 +193,8 @@ const en: typeof ru = {
   modal_up_to: 'up to', modal_kg: 'kg', modal_m: 'm',
 
   header_save: 'Save project', header_export: 'Export',
-  header_last_save: 'Last saved: today, 14:32',
+  header_last_save: 'Saved:', header_not_saved: 'Not saved yet',
+  header_export_json: 'Project (JSON)', header_export_csv: 'Loading plan (CSV)',
 
   left_vehicle: 'Vehicle selection', left_length: 'Length', left_width: 'Width',
   left_height: 'Height', left_mm: 'mm', left_capacity: 'Payload',
@@ -207,6 +218,10 @@ const en: typeof ru = {
   right_optimize: 'Plan the load', right_optimizing: 'Calculating...',
   right_placed: 'Placed cargo', right_actions: 'Actions',
   right_clear: 'Clear load', right_report: 'Generate report',
+  step_label: 'Step', step_first: 'To start', step_prev: 'Previous step', step_next: 'Next step', step_last: 'To end',
+  step_play: 'Play', step_pause: 'Pause', step_empty: 'Empty cargo space — press ▶',
+  step_highlight: 'current step',
+  support_floor: 'on the floor', support_between_arches: 'between arches', support_on_arch: 'on an arch', support_stacked: 'on other cargo',
   right_verified: 'Verified: 0 violations', right_violations: 'Verification violations',
   right_unplaced: 'Did not fit', right_all_placed: 'All cargo placed',
   right_best_of: 'Best of {n} packing variants', right_heuristic_note: 'Heuristic result: a good, but not guaranteed best, arrangement.',
