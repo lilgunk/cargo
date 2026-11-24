@@ -3,7 +3,7 @@ import { ChevronDown, Trash2 } from 'lucide-react';
 import { vehicleService } from '../../services/vehicleService';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
-import { allowedDims } from '../../algorithm/packCargo';
+import { allowedDims, MAX_UNITS } from '../../algorithm/packCargo';
 import type { RotationRule } from '../../types';
 
 type Tab = 'box' | 'pallet';
@@ -76,6 +76,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
     const qty = parseInt(form.qty, 10);
     if (!(l > 0 && w > 0 && h > 0 && wt > 0 && qty > 0)) { setFormError(t.left_err_numbers); return; }
     if (pallet && h <= PALLET_BASE_HEIGHT) { setFormError(t.left_err_pallet_height); return; }
+    if (totalItems + qty > MAX_UNITS) { setFormError(t.left_err_too_many.replace('{n}', String(MAX_UNITS))); return; }
     const rot: RotationRule = pallet ? 'horizontal' : rotation;
 
     // Z4: the item must fit the cargo space in at least one allowed orientation.

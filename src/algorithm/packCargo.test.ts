@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { CargoItem, Vehicle } from '../types';
-import { allowedDims, intersects, packCargo, packCargoBest, planQuality, portfolio } from './packCargo';
+import { allowedDims, intersects, MAX_UNITS, packCargo, packCargoBest, planQuality, portfolio } from './packCargo';
 import { verifyPacking } from './verifyPacking';
 
 const van = (o: Partial<Vehicle> = {}): Vehicle => ({
@@ -139,6 +139,25 @@ describe('properties', () => {
       expect(r.placed.length + r.unplaced.length).toBe(items.reduce((s, i) => s + i.quantity, 0));
     }), { numRuns: 300 });
   }, 120_000);
+});
+
+describe('time budget', () => {
+  it('with no time left still returns one complete, valid variant', () => {
+    const items = [item({ id: 'a', quantity: 30 }), item({ id: 'b', length: 700, width: 400, height: 300, quantity: 10 })];
+    const r = packCargoBest(items, van(), 0.75, 0);
+    expect(r.variantsTried).toBe(1);
+    expect(r.placed.length + r.unplaced.length).toBe(40);
+    expect(verifyPacking(items, van(), r.placed, 0.75)).toEqual([]);
+  });
+
+  it('a run past its deadline is marked aborted', () => {
+    const r = packCargo([item({ id: 'a', quantity: 5 })], van(), { deadline: performance.now() - 1 });
+    expect(r.aborted).toBe(true);
+  });
+
+  it('keeps the limit at a size the planner computes in seconds', () => {
+    expect(MAX_UNITS).toBeLessThanOrEqual(1000);
+  });
 });
 
 describe('best-of portfolio', () => {

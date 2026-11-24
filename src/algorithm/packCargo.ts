@@ -37,6 +37,8 @@ export interface PackOptions {
    * above it on the floor. Floor-only cargo is always packed first.
    */
   nonStackableLast?: boolean;
+  /** performance.now() time after which the run gives up (result marked `aborted`). */
+  deadline?: number;
 }
 
 const SORT_VALUE: Record<SortRule, (i: CargoItem) => number> = {
@@ -156,7 +158,7 @@ function extremePoints(b: Box, solids: Box[]): Point[] {
 
 const STACK_REASONS: UnplacedReason[] = ['NOT_STACKABLE', 'UNSTABLE', 'INSUFFICIENT_SUPPORT'];
 
-export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOptions = {}): PackingResult {
+export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOptions = {}): PackingResult & { aborted?: boolean } {
   const supportRatio = options.supportRatio ?? DEFAULT_SUPPORT_RATIO;
   const sortValue = SORT_VALUE[options.sortBy ?? 'volume'];
   const positionOrder = POSITION_ORDER[options.positions ?? 'floor-first'];
@@ -329,6 +331,7 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
   // Identical units fail identically as long as nothing new was placed (payload included).
   let lastFail: { item: CargoItem; placedCount: number; reason: UnplacedReason } | null = null;
   for (const { item } of units) {
+    if (options.deadline !== undefined && performance.now() > options.deadline) return { placed: [], unplaced: [], aborted: true };
     let reason: UnplacedReason | null;
     if (lastFail && lastFail.item === item && lastFail.placedCount === placed.length) reason = lastFail.reason;
     else reason = place(item);
@@ -451,20 +454,37 @@ export function portfolio(): Variant[] {
 }
 
 /**
- * Runs the heuristic for every variant of portfolio() and keeps the best plan.
+ * Limits that keep the planner responsive. One variant costs roughly O(n²) in the
+ * number of units (measured: 480 mixed boxes ≈ 0.45 s per variant), so the whole
+ * portfolio for thousands of units would take hours.
+ */
+export const MAX_UNITS = 1000;            // units in one plan (checked in the form)
+export const PLAN_TIME_BUDGET_MS = 8000;  // stop trying further variants after this
+
+/**
+ * Runs the heuristic for the variants of portfolio() and keeps the best plan.
+ * After `budgetMs` no further variants are started (the first one always runs),
+ * so large cargo lists get a plan in seconds from fewer variants.
  * Still a heuristic: the best of the tried variants, not a proven optimum.
  */
-export function packCargoBest(items: CargoItem[], vehicle: Vehicle, supportRatio = DEFAULT_SUPPORT_RATIO): BestPlan {
+export function packCargoBest(items: CargoItem[], vehicle: Vehicle, supportRatio = DEFAULT_SUPPORT_RATIO, budgetMs = Infinity): BestPlan {
   const variants = portfolio();
+  const t0 = performance.now();
+  let tried = 0;
   let best: BestPlan | null = null;
   let bestQ: PlanQuality | null = null;
   for (const v of variants) {
-    const r = packCargo(items, vehicle, { supportRatio, ...v });
+    if (tried > 0 && performance.now() - t0 > budgetMs) break;
+    // the first variant always completes; later ones give up at the deadline and are discarded
+    const deadline = best ? t0 + budgetMs : undefined;
+    const r = packCargo(items, vehicle, { supportRatio, ...v, deadline });
+    if (r.aborted) break;
+    tried++;
     const q = planQuality(r, vehicle.height);
     if (!best || better(q, bestQ!)) {
-      best = { ...r, ...v, variantsTried: variants.length };
+      best = { ...r, ...v, variantsTried: 0 };
       bestQ = q;
     }
   }
-  return best!;
+  return { ...best!, variantsTried: tried };
 }

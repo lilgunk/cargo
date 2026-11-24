@@ -1,7 +1,7 @@
 // Computes a plan in a Web Worker when available (browser), otherwise in place
 // (tests / environments without workers). Same result either way.
 import type { CargoItem, Vehicle } from '../types';
-import { packCargoBest, type BestPlan } from './packCargo';
+import { packCargoBest, PLAN_TIME_BUDGET_MS, type BestPlan } from './packCargo';
 import { verifyPacking, type Violation } from './verifyPacking';
 import type { PackRequest } from './packWorker';
 
@@ -12,7 +12,7 @@ export interface PlanResult extends BestPlan {
 
 export function computePlanSync(items: CargoItem[], vehicle: Vehicle, supportRatio: number): PlanResult {
   const t0 = performance.now();
-  const best = packCargoBest(items, vehicle, supportRatio);
+  const best = packCargoBest(items, vehicle, supportRatio, PLAN_TIME_BUDGET_MS);
   const elapsedMs = performance.now() - t0;
   return { ...best, violations: verifyPacking(items, vehicle, best.placed, supportRatio), elapsedMs };
 }

@@ -3,11 +3,14 @@ import { MoreVertical, Trash2, FileText, Zap, ShieldCheck, ShieldAlert, AlertTri
 import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
 import type { UnplacedReason } from '../../types';
+import { MAX_UNITS } from '../../algorithm/packCargo';
 
 export function RightPanel({ store }: { store: CargoStore }) {
   const { t } = useSettings();
   const [optimizing, setOptimizing] = useState(false);
   const { occupancy, usedVolume, maxVolume, placedWeight, totalItems, freeVolume, vehicle, cargoItems, placed, unplaced, plan } = store;
+
+  const tooMany = totalItems > MAX_UNITS; // e.g. a project saved before the limit existed
 
   function handleOptimize() {
     setOptimizing(true);
@@ -69,13 +72,16 @@ export function RightPanel({ store }: { store: CargoStore }) {
             </div>
           ))}
         </div>
-        <button onClick={handleOptimize} disabled={optimizing || store.cargoItems.length === 0}
+        <button onClick={handleOptimize} disabled={optimizing || store.cargoItems.length === 0 || tooMany}
           className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 dark:bg-blue-600 text-white text-xs font-semibold hover:bg-gray-800 dark:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           {optimizing
             ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             : <Zap size={13} />}
           {optimizing ? t.right_optimizing : t.right_optimize}
         </button>
+        {tooMany && (
+          <p className="mt-2 text-[10px] leading-snug text-red-500">{t.right_too_many.replace('{n}', String(MAX_UNITS))}</p>
+        )}
         {plan && (
           <p className="mt-2 text-[10px] leading-snug text-gray-400 dark:text-slate-500">
             {t.right_best_of.replace('{n}', String(plan.variantsTried))} · {plan.elapsedMs.toFixed(0)} ms. {t.right_heuristic_note}
