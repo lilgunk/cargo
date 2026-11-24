@@ -14,6 +14,9 @@ function spaFallback(): Plugin {
       outDir = resolve(config.root, config.build.outDir)
     },
     closeBundle() {
+      // Cloudflare Pages serves index.html for unknown paths by itself (SPA mode) —
+      // but only when there is no 404.html, so the copy is made for GitHub Pages only.
+      if (process.env.CF_PAGES) return
       copyFileSync(resolve(outDir, 'index.html'), resolve(outDir, '404.html'))
     },
   }
