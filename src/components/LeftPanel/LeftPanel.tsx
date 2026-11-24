@@ -90,6 +90,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
       name, length: l, width: w, height: h, weight: wt, quantity: qty, rotation: rot,
       stackable: pallet ? palletStackable : stackable,
       floorOnly: pallet ? true : floorOnly,
+      kind: pallet ? 'pallet' : 'box',
     });
     setForm(f => ({ ...f, name: '', qty: '1' }));
   }
@@ -101,7 +102,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
   const inputCls = 'w-full px-2 py-1.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded text-xs text-gray-800 dark:text-gray-100 focus:outline-none focus:border-blue-500 tabular-nums';
 
   return (
-    <aside className="w-56 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col overflow-hidden flex-shrink-0">
+    <aside className="w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col overflow-y-auto flex-shrink-0">
       {/* Vehicle */}
       <div className="px-4 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
         <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 mb-2">{t.left_vehicle}</div>
@@ -145,7 +146,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
         </div>
         <div className="flex justify-between text-xs px-0.5">
           <span className="text-gray-400 dark:text-slate-500">{t.left_capacity}</span>
-          <span className="text-gray-700 dark:text-gray-300 font-medium tabular-nums">{vehicle.maxWeight} {t.left_mm === 'мм' ? 'кг' : t.left_mm === 'mm' ? 'kg' : 'kg'}</span>
+          <span className="text-gray-700 dark:text-gray-300 font-medium tabular-nums">{vehicle.maxWeight} {t.unit_kg}</span>
         </div>
       </div>
 
@@ -163,14 +164,14 @@ export function LeftPanel({ store }: { store: CargoStore }) {
           ))}
         </div>
         <div className="mb-2">
-          <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_name}</label>
+          <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{t.left_name}</label>
           <input type="text" value={form.name} placeholder={t.left_name_ph} maxLength={60}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             className={inputCls} />
         </div>
         {tab === 'pallet' && (
           <div className="mb-2">
-            <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_pallet_type}</label>
+            <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{t.left_pallet_type}</label>
             <select value={palletType} onChange={e => setPalletType(e.target.value as PalletType)} className={inputCls}>
               {(Object.keys(PALLETS) as PalletType[]).map(p => (
                 <option key={p} value={p}>{t[`left_pallet_${p}`]} · {PALLETS[p].length}×{PALLETS[p].width}</option>
@@ -188,7 +189,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
               { label: t.left_weight_kg, key: 'weight' },
             ]).map(({ label, key }) => (
             <div key={key}>
-              <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{label}</label>
+              <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{label}</label>
               <input type="number" value={form[key as keyof typeof form]}
                 onChange={e => { setFormError(null); setForm(f => ({ ...f, [key]: e.target.value })); }}
                 className={inputCls} />
@@ -196,7 +197,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
           ))}
         </div>
         <div className="mb-2">
-          <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_qty}</label>
+          <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{t.left_qty}</label>
           <input type="number" value={form.qty}
             onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
             className={inputCls} />
@@ -204,7 +205,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
         {tab === 'box' ? (
           <>
             <div className="mb-2">
-              <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_rotation}</label>
+              <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{t.left_rotation}</label>
               <select value={rotation} onChange={e => setRotation(e.target.value as RotationRule)} className={inputCls}>
                 <option value="none">{t.left_rot_none}</option>
                 <option value="horizontal">{t.left_rot_horizontal}</option>
@@ -237,9 +238,9 @@ export function LeftPanel({ store }: { store: CargoStore }) {
       </div>
 
       {/* Cargo list */}
-      <div className="flex-1 flex flex-col overflow-hidden px-4 pt-3">
+      <div className="flex flex-col px-4 pt-3">
         <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 mb-2">{t.left_list}</div>
-        <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+        <div className="space-y-1.5">
           {cargoItems.map(item => (
             <div key={item.id}
               className="flex items-start gap-2 p-2 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 group">
@@ -255,7 +256,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
                   {item.length} × {item.width} × {item.height} {t.left_mm}
                 </div>
                 <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">
-                  {item.weight} {t.left_mm === 'мм' ? 'кг' : 'kg'} · {item.quantity} {t.left_mm === 'мм' ? 'шт.' : t.left_mm === 'mm' ? 'szt.' : 'pcs.'}
+                  {item.weight} {t.unit_kg} · {item.quantity} {t.unit_pcs}
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1">
                   <span className="px-1.5 py-px rounded text-[9px] bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{rotationShort[item.rotation]}</span>
@@ -276,7 +277,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
         </div>
         <div className="flex justify-between py-3 border-t border-gray-200 dark:border-slate-700 flex-shrink-0">
           <span className="text-[11px] text-gray-400 dark:text-slate-500">
-            {t.left_total_weight}: <span className="text-gray-700 dark:text-gray-300 font-medium">{totalWeight} {t.left_mm === 'мм' ? 'кг' : 'kg'}</span>
+            {t.left_total_weight}: <span className="text-gray-700 dark:text-gray-300 font-medium">{totalWeight} {t.unit_kg}</span>
           </span>
           <span className="text-[11px] text-gray-400 dark:text-slate-500">
             {t.left_total_items}: <span className="text-gray-700 dark:text-gray-300 font-medium">{totalItems}</span>

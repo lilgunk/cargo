@@ -58,10 +58,10 @@ export function RightPanel({ store }: { store: CargoStore }) {
         </div>
         <div className="space-y-2.5">
           {[
-            { label: t.right_volume, value: `${usedVolume.toFixed(2)} м³ / ${maxVolume.toFixed(1)} м³` },
-            { label: t.right_placed_weight, value: `${placedWeight} кг / ${vehicle.maxWeight} кг` },
-            { label: t.right_places, value: `${placed.length} / ${totalItems} шт.` },
-            { label: t.right_free,   value: `${freeVolume.toFixed(2)} м³` },
+            { label: t.right_volume, value: `${usedVolume.toFixed(2)} ${t.unit_m3} / ${maxVolume.toFixed(1)} ${t.unit_m3}` },
+            { label: t.right_placed_weight, value: `${placedWeight} ${t.unit_kg} / ${vehicle.maxWeight} ${t.unit_kg}` },
+            { label: t.right_places, value: `${placed.length} / ${totalItems} ${t.unit_pcs}` },
+            { label: t.right_free,   value: `${freeVolume.toFixed(2)} ${t.unit_m3}` },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between">
               <span className="text-xs text-gray-500 dark:text-slate-400">{label}</span>
@@ -132,10 +132,10 @@ export function RightPanel({ store }: { store: CargoStore }) {
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-gray-900 dark:text-gray-100 font-medium leading-tight truncate">{item.name}</div>
                 <div className="text-[10px] text-gray-600 dark:text-slate-300 tabular-nums mt-0.5">
-                  {item.length} × {item.width} × {item.height} мм
+                  {item.length} × {item.width} × {item.height} {t.left_mm}
                 </div>
                 <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">
-                  {item.weight} кг · {item.placedCount} шт.
+                  {item.weight} {t.unit_kg} · {item.placedCount} {t.unit_pcs}
                 </div>
                 <div className="text-[10px] text-gray-400 dark:text-slate-500 font-mono mt-0.5">{item.pos}</div>
               </div>

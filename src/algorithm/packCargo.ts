@@ -335,6 +335,8 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     x: b.x, y: b.y, z: b.z,
     length: b.l, width: b.w, height: b.h,
     support: b.support,
+    kind: b.item.kind ?? 'box',
+    stackable: b.item.stackable,
   }));
   return { placed: result, unplaced };
 }

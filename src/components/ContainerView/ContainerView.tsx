@@ -1,9 +1,15 @@
-import { useState } from 'react';
-import { RotateCcw, Maximize2, Eye, Box, Plus, Minus } from 'lucide-react';
+import { lazy, Suspense, useRef, useState } from 'react';
+import { RotateCcw, Maximize2, Eye, EyeOff, Ruler } from 'lucide-react';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import type { PlacedUnit, Vehicle } from '../../types';
 import { StepBar } from '../StepBar/StepBar';
 import { useSettings } from '../../contexts/SettingsContext';
+// three.js is loaded only when the planner is opened (keeps the login page light)
+const Van3DView = lazy(() => import('../Van3D/Van3DView').then(m => ({ default: m.Van3DView })));
+import type { ViewName } from '../Van3D/vanScene';
+
+const WOOD = '#c9a067';
+const PALLET_BASE = 144; // mm
 
 const HIGHLIGHT = '#2563eb';
 
@@ -259,6 +265,7 @@ function VanSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicle })
 // Arch shape from above: a rounded band along each side wall in the arch X zone.
 // The inner edge is curved (convex inward) — not a sharp rectangle.
 function TopViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicle }) {
+  const { t } = useSettings();
   const scaleX = TOP_W / vehicle.length;
   const scaleY = TOP_H / vehicle.width;
   const arches = vehicle.wheelArches ?? [];
@@ -275,10 +282,10 @@ function TopViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicl
       </defs>
 
       {/* Van outline */}
-      <rect x="10" y={TOP_OY} width={TOP_OX - 10 + TOP_W} height={TOP_H} rx="4" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
+      <rect x="10" y={TOP_OY} width={TOP_OX - 10 + TOP_W} height={TOP_H} rx="4" className="fill-slate-50 stroke-slate-300 dark:fill-slate-800 dark:stroke-slate-600" strokeWidth="1.2" />
       {/* Cab zone */}
-      <rect x="10" y={TOP_OY} width={TOP_OX - 10} height={TOP_H} rx="4" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-      <text x="45" y="88" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace" transform="rotate(-90,45,88)">КАБИНА</text>
+      <rect x="10" y={TOP_OY} width={TOP_OX - 10} height={TOP_H} rx="4" className="fill-slate-200 stroke-slate-300 dark:fill-slate-700 dark:stroke-slate-600" strokeWidth="1" />
+      <text x="45" y="88" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace" transform="rotate(-90,45,88)">{t.view_cab.toUpperCase()}</text>
 
       {/* Cargo boxes */}
       <g clipPath="url(#topCargoClip)">
@@ -344,7 +351,7 @@ function TopViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicl
               {aw > 35 && (
                 <text x={midX} y={midY}
                   textAnchor="middle" fontSize="6.5" fill="#64748b" fontFamily="ui-monospace,monospace">
-                  {(vehicle.width - arch.intrusionPerSide * 2).toLocaleString()} мм
+                  {(vehicle.width - arch.intrusionPerSide * 2).toLocaleString()} mm
                 </text>
               )}
             </g>
@@ -353,10 +360,10 @@ function TopViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehicl
       </g>
 
       <text x={TOP_OX + TOP_W / 2} y="164" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace">
-        ← {vehicle.length.toLocaleString()} мм →
+        ← {vehicle.length.toLocaleString()} mm →
       </text>
       <text x="452" y="88" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace" transform="rotate(90,452,88)">
-        {vehicle.width.toLocaleString()} мм
+        {vehicle.width.toLocaleString()} mm
       </text>
     </svg>
   );
@@ -380,7 +387,7 @@ function SideViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
         </clipPath>
       </defs>
 
-      <rect x={SV_OX} y={SV_OY} width={SV_W} height={SV_H} fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" rx="2" />
+      <rect x={SV_OX} y={SV_OY} width={SV_W} height={SV_H} className="fill-slate-50 stroke-slate-300 dark:fill-slate-800 dark:stroke-slate-600" strokeWidth="1.2" rx="2" />
 
       {/* Arch: smooth parabolic hump rising from floor */}
       <g clipPath="url(#svCargoClip)">
@@ -406,7 +413,7 @@ function SideViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
               <path d={archPath} fill="#cbd5e1" fillOpacity="0.7" stroke="#94a3b8" strokeWidth="0.9" />
               <text x={midX} y={peakY - 3}
                 textAnchor="middle" fontSize="6" fill="#64748b" fontFamily="ui-monospace,monospace">
-                ~{arch.heightFromFloor} мм
+                ~{arch.heightFromFloor} mm
               </text>
             </g>
           );
@@ -420,21 +427,25 @@ function SideViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
           const y = SV_OY + SV_H - (u.z + u.height) * scaleZ;
           const w = u.length * scaleX;
           const h = u.height * scaleZ;
+          const base = u.kind === 'pallet' ? PALLET_BASE * scaleZ : 0;
           return (
-            <rect key={i} x={x + 0.5} y={y + 0.5}
-              width={Math.max(1, w - 1)} height={Math.max(1, h - 1)}
-              fill={u.color} fillOpacity="0.55"
-              stroke={u.color} strokeOpacity="0.85" strokeWidth="0.8"
-            />
+            <g key={i}>
+              <rect x={x + 0.5} y={y + 0.5}
+                width={Math.max(1, w - 1)} height={Math.max(1, h - 1 - base)}
+                fill={u.color} fillOpacity="0.55"
+                stroke={u.color} strokeOpacity="0.85" strokeWidth="0.8"
+              />
+              {base > 0 && <rect x={x + 0.5} y={y + h - base} width={Math.max(1, w - 1)} height={base} fill={WOOD} stroke="#8a6a3c" strokeWidth="0.6" />}
+            </g>
           );
         })}
       </g>
 
       <text x={SV_OX + SV_W / 2} y="148" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace">
-        ← {vehicle.length.toLocaleString()} мм →
+        ← {vehicle.length.toLocaleString()} mm →
       </text>
       <text x="76" y={SV_OY + SV_H / 2} textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace" transform={`rotate(-90,76,${SV_OY + SV_H / 2})`}>
-        {vehicle.height.toLocaleString()} мм
+        {vehicle.height.toLocaleString()} mm
       </text>
     </svg>
   );
@@ -459,7 +470,7 @@ function RearViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
         </clipPath>
       </defs>
 
-      <rect x={RV_OX} y={RV_OY} width={RV_W} height={RV_H} fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" rx="2" />
+      <rect x={RV_OX} y={RV_OY} width={RV_W} height={RV_H} className="fill-slate-50 stroke-slate-300 dark:fill-slate-800 dark:stroke-slate-600" strokeWidth="1.2" rx="2" />
 
       {/* Arch cross-sections — quarter-ellipse shapes */}
       <g clipPath="url(#rvCargoClip)">
@@ -510,7 +521,7 @@ function RearViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
               <line x1={rInner} y1={dimY - 3} x2={rInner} y2={dimY + 3} stroke="#64748b" strokeWidth="0.8" />
               <text x={midX} y={dimY - 3}
                 textAnchor="middle" fontSize="7" fill="#475569" fontFamily="ui-monospace,monospace" fontWeight="500">
-                {(vehicle.width - arch.intrusionPerSide * 2).toLocaleString()} мм
+                {(vehicle.width - arch.intrusionPerSide * 2).toLocaleString()} mm
               </text>
 
               {/* Arch height label */}
@@ -518,7 +529,7 @@ function RearViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
               <text x={leftX - 6} y={(peakY + floorY) / 2}
                 textAnchor="middle" fontSize="6" fill="#94a3b8" fontFamily="ui-monospace,monospace"
                 transform={`rotate(-90,${leftX - 6},${(peakY + floorY) / 2})`}>
-                ~{arch.heightFromFloor} мм
+                ~{arch.heightFromFloor} mm
               </text>
             </g>
           );
@@ -532,21 +543,25 @@ function RearViewSVG({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Vehic
           const y = RV_OY + RV_H - (u.z + u.height) * scaleZ;
           const w = u.width * scaleY;
           const h = u.height * scaleZ;
+          const base = u.kind === 'pallet' ? PALLET_BASE * scaleZ : 0;
           return (
-            <rect key={i} x={x + 0.5} y={y + 0.5}
-              width={Math.max(1, w - 1)} height={Math.max(1, h - 1)}
-              fill={u.color} fillOpacity="0.55"
-              stroke={u.color} strokeOpacity="0.85" strokeWidth="0.8"
-            />
+            <g key={i}>
+              <rect x={x + 0.5} y={y + 0.5}
+                width={Math.max(1, w - 1)} height={Math.max(1, h - 1 - base)}
+                fill={u.color} fillOpacity="0.55"
+                stroke={u.color} strokeOpacity="0.85" strokeWidth="0.8"
+              />
+              {base > 0 && <rect x={x + 0.5} y={y + h - base} width={Math.max(1, w - 1)} height={base} fill={WOOD} stroke="#8a6a3c" strokeWidth="0.6" />}
+            </g>
           );
         })}
       </g>
 
       <text x={RV_OX + RV_W / 2} y="148" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace">
-        ← {vehicle.width.toLocaleString()} мм →
+        ← {vehicle.width.toLocaleString()} mm →
       </text>
       <text x="88" y={RV_OY + RV_H / 2} textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="ui-monospace,monospace" transform={`rotate(-90,88,${RV_OY + RV_H / 2})`}>
-        {vehicle.height.toLocaleString()} мм
+        {vehicle.height.toLocaleString()} mm
       </text>
     </svg>
   );
@@ -621,110 +636,144 @@ function PhotoCargoView({ placed, vehicle }: { placed: PlacedUnit[]; vehicle: Ve
 
 // ─── Main component ───────────────────────────────────────────────────────────
 type Tab2D = 'top' | 'side' | 'rear';
+type MainView = ViewName | 'photo';
 
 export function ContainerView({ store }: { store: CargoStore }) {
   const { vehicle, cargoItems, step } = store;
   const { t } = useSettings();
-  // Step-by-step preview: units loaded so far; the last one (current step) is highlighted.
-  const placed = store.placed.slice(0, step).map((u, i, arr) =>
-    i === arr.length - 1 && step < store.placed.length ? { ...u, color: HIGHLIGHT } : u);
   const [tab2d, setTab2d] = useState<Tab2D>('top');
+  const [view, setView] = useState<MainView>('persp');
+  const [bodyVisible, setBodyVisible] = useState(true);
+  const [dimsVisible, setDimsVisible] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
+  const frame = useRef<HTMLDivElement>(null);
+
+  // Step-by-step preview: units loaded so far; the current one is highlighted.
+  const loaded = store.placed.slice(0, step);
+  const highlightIndex = step > 0 && step < store.placed.length ? step - 1 : null;
+  const placed = loaded.map((u, i) => (i === highlightIndex ? { ...u, color: HIGHLIGHT } : u));
 
   const hasArches = (vehicle.wheelArches?.length ?? 0) > 0;
+  const hasPallets = loaded.some(u => u.kind === 'pallet');
+  const hasNoStack = loaded.some(u => u.stackable === false);
 
-  const projViews: { id: Tab2D; label: string }[] = [
-    { id: 'top',  label: 'Вид сверху' },
-    { id: 'side', label: 'Вид сбоку'  },
-    { id: 'rear', label: 'Вид сзади'  },
+  const views: { id: MainView; label: string }[] = [
+    { id: 'persp', label: '3D' },
+    { id: 'side', label: t.view_side_short },
+    { id: 'rear', label: t.view_rear_short },
+    { id: 'top', label: t.view_top_short },
+    ...(vehicle.cargoView ? [{ id: 'photo' as const, label: t.view_photo }] : []),
   ];
+  const projViews: { id: Tab2D; label: string }[] = [
+    { id: 'top', label: t.view_top },
+    { id: 'side', label: t.view_side },
+    { id: 'rear', label: t.view_rear },
+  ];
+  const iconBtn = 'p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-700 dark:hover:text-gray-200 transition-colors';
+  const is3d = view !== 'photo';
 
   return (
     <div className="flex-1 bg-white dark:bg-slate-900 flex flex-col overflow-hidden min-w-0">
       {/* Header */}
-      <div className="h-11 border-b border-gray-200 dark:border-slate-700 flex items-center px-4 gap-2 flex-shrink-0">
-        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">3D вид загрузки</span>
+      <div className="h-11 border-b border-gray-200 dark:border-slate-700 flex items-center px-4 gap-3 flex-shrink-0">
+        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t.view_title}</span>
+        <div className="flex rounded-lg bg-gray-100 dark:bg-slate-800 p-0.5" role="tablist" aria-label={t.view_title}>
+          {views.map(v => (
+            <button key={v.id} role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                view === v.id ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}>
+              {v.label}
+            </button>
+          ))}
+        </div>
         <div className="flex-1" />
-        <button className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title="Сбросить вид">
-          <RotateCcw size={14} />
-        </button>
-        <button className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title="3D вид">
-          <Box size={14} />
-        </button>
-        <button className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title="Видимость">
-          <Eye size={14} />
-        </button>
-        <button className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title="Полный экран">
+        {is3d && (
+          <>
+            <button className={iconBtn} onClick={() => setResetKey(k => k + 1)} title={t.view_reset} aria-label={t.view_reset}><RotateCcw size={14} /></button>
+            <button className={iconBtn} onClick={() => setBodyVisible(b => !b)} title={bodyVisible ? t.view_hide_body : t.view_show_body} aria-label={t.view_hide_body} aria-pressed={!bodyVisible}>
+              {bodyVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+            </button>
+            <button className={`${iconBtn} ${dimsVisible ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : ''}`} onClick={() => setDimsVisible(d => !d)} title={t.view_dims} aria-label={t.view_dims} aria-pressed={dimsVisible}>
+              <Ruler size={14} />
+            </button>
+          </>
+        )}
+        <button className={iconBtn} onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void frame.current?.requestFullscreen(); }} title={t.view_fullscreen} aria-label={t.view_fullscreen}>
           <Maximize2 size={14} />
         </button>
       </div>
 
       {/* 3D / photo view */}
-      <div className="flex-1 flex items-center justify-center px-6 pt-4 pb-2 overflow-hidden min-h-0">
-        {vehicle.cargoView
-          ? <PhotoCargoView placed={placed} vehicle={vehicle} />
-          : <VanSVG placed={placed} vehicle={vehicle} />
-        }
+      <div ref={frame} className="flex-1 flex items-center justify-center px-4 pt-3 pb-2 overflow-hidden min-h-0 bg-white dark:bg-slate-900">
+        {is3d ? (
+          <Suspense fallback={<div className="w-full h-full rounded-lg bg-slate-50 dark:bg-slate-800 animate-pulse" />}>
+            <Van3DView vehicle={vehicle} placed={loaded} highlightIndex={highlightIndex} view={view}
+              bodyVisible={bodyVisible} dimsVisible={dimsVisible} resetKey={resetKey}
+              fallback={vehicle.cargoView ? <PhotoCargoView placed={placed} vehicle={vehicle} /> : <VanSVG placed={placed} vehicle={vehicle} />} />
+          </Suspense>
+        ) : (
+          <PhotoCargoView placed={placed} vehicle={vehicle} />
+        )}
       </div>
 
       <StepBar store={store} />
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-4 pb-2 flex-wrap px-4">
-        {cargoItems.map(({ id, color, length, width, height }) => (
+      <div className="flex items-center justify-center gap-x-4 gap-y-1 pb-2 flex-wrap px-4">
+        {cargoItems.map(({ id, color, name }) => (
           <div key={id} className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-            <span className="text-[11px] text-gray-500 dark:text-slate-400">{length}×{width}×{height} мм</span>
+            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+            <span className="text-[11px] text-gray-600 dark:text-slate-300">{name}</span>
           </div>
         ))}
-        {step > 0 && step < store.placed.length && (
+        {highlightIndex !== null && (
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: HIGHLIGHT }} />
+            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0 ring-2 ring-blue-500/40" style={{ backgroundColor: HIGHLIGHT }} />
             <span className="text-[11px] text-gray-500 dark:text-slate-400">{t.step_highlight}</span>
+          </div>
+        )}
+        {hasPallets && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-1.5 rounded-sm flex-shrink-0" style={{ backgroundColor: WOOD }} />
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">{t.legend_pallet}</span>
+          </div>
+        )}
+        {hasNoStack && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0 border-2 border-red-500" />
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">{t.left_not_stackable_tag}</span>
           </div>
         )}
         {hasArches && (
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded flex-shrink-0 bg-slate-300 border border-slate-400" style={{
-              backgroundImage: 'repeating-linear-gradient(45deg, #94a3b8 0, #94a3b8 1px, transparent 0, transparent 50%)',
-              backgroundSize: '4px 4px',
-            }} />
-            <span className="text-[11px] text-gray-400 dark:text-slate-500">Колёсные арки</span>
+            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0 bg-amber-400/50 border border-amber-500" />
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">{t.legend_arches}</span>
           </div>
         )}
       </div>
 
       {/* 2D projections */}
       <div className="border-t border-gray-200 dark:border-slate-700 flex-shrink-0 px-4 pt-3 pb-4">
-        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">2D проекции</div>
-        <div className="flex border-b border-gray-200 dark:border-slate-700 mb-3">
-          {projViews.map(({ id, label }) => (
-            <button key={id} onClick={() => setTab2d(id)}
-              className={`pb-2 mr-5 text-xs transition-colors border-b-2 -mb-px ${
-                tab2d === id
-                  ? 'border-blue-500 text-blue-600 font-medium'
-                  : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-              }`}>
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4 mb-2">
+          <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t.view_2d_title}</div>
+          <div className="flex border-b border-gray-200 dark:border-slate-700">
+            {projViews.map(({ id, label }) => (
+              <button key={id} onClick={() => setTab2d(id)}
+                className={`pb-1.5 mr-4 text-xs transition-colors border-b-2 -mb-px ${
+                  tab2d === id
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-medium'
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-start gap-2">
-          <div className="flex-1 h-36">
-            {tab2d === 'top'  && <TopViewSVG  placed={placed} vehicle={vehicle} />}
-            {tab2d === 'side' && <SideViewSVG placed={placed} vehicle={vehicle} />}
-            {tab2d === 'rear' && <RearViewSVG placed={placed} vehicle={vehicle} />}
-          </div>
-          <div className="flex flex-col gap-1 flex-shrink-0">
-            <button className="w-7 h-7 rounded border border-gray-300 dark:border-slate-600 flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-              <Plus size={12} />
-            </button>
-            <button className="w-7 h-7 rounded border border-gray-300 dark:border-slate-600 flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-              <Minus size={12} />
-            </button>
-            <button className="w-7 h-7 rounded border border-gray-300 dark:border-slate-600 flex items-center justify-center text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-              <RotateCcw size={11} />
-            </button>
-          </div>
+        <div className="h-36">
+          {tab2d === 'top'  && <TopViewSVG  placed={placed} vehicle={vehicle} />}
+          {tab2d === 'side' && <SideViewSVG placed={placed} vehicle={vehicle} />}
+          {tab2d === 'rear' && <RearViewSVG placed={placed} vehicle={vehicle} />}
         </div>
       </div>
     </div>

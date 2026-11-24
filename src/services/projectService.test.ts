@@ -45,3 +45,20 @@ describe('projectService', () => {
     expect(slugify('Dostawa AGD – Łódź')).toBe('dostawa-agd-lodz');
   });
 });
+
+describe('useCargoStore', () => {
+  it('gives unique ids to items added in the same moment (verifier stays at 0 violations)', async () => {
+    const { result } = renderHook(() => useCargoStore());
+    act(() => {
+      result.current.clearAll();
+      for (let i = 0; i < 4; i++) {
+        result.current.addCargo({ name: `x${i}`, length: 400 + i * 100, width: 300, height: 300, weight: 5, quantity: 2, rotation: 'any', stackable: true });
+      }
+    });
+    const ids = result.current.cargoItems.map(c => c.id);
+    expect(new Set(ids).size).toBe(4);
+    await act(async () => { await result.current.optimize(); });
+    expect(result.current.plan?.violations).toEqual([]);
+    expect(result.current.placed).toHaveLength(8);
+  });
+});

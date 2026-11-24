@@ -4,7 +4,7 @@ import { vehicleService } from '../services/vehicleService';
 import { DEFAULT_SUPPORT_RATIO } from '../algorithm/packCargo';
 import { verifyPacking } from '../algorithm/verifyPacking';
 import { computePlan, type PlanResult } from '../algorithm/computePlan';
-import type { CargoItem, RotationRule, VehicleId } from '../types';
+import type { CargoItem, CargoKind, RotationRule, VehicleId } from '../types';
 import type { SavedProject } from '../services/projectService';
 
 const COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#60a5fa', '#a78bfa', '#fb923c', '#4ade80'];
@@ -19,6 +19,7 @@ export interface NewCargo {
   rotation: RotationRule;
   stackable: boolean;
   floorOnly?: boolean;
+  kind?: CargoKind;
 }
 
 export type { PlanResult };
@@ -51,7 +52,7 @@ export function useCargoStore() {
     setCargoItems(prev => {
       const color = COLORS[prev.length % COLORS.length];
       const name = fields.name.trim() || `Ładunek ${prev.length + 1}`;
-      return [...prev, { id: `cargo-${Date.now()}`, ...fields, name, color }];
+      return [...prev, { id: `cargo-${crypto.randomUUID()}`, ...fields, name, color }];
     });
     setPlan(null);
     return true;

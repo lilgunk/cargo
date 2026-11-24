@@ -39,6 +39,9 @@ export interface Vehicle {
 // any — may be laid on any side
 export type RotationRule = 'none' | 'horizontal' | 'any';
 
+/** Visual kind of cargo: a carton/crate or a load on a wooden pallet (base 144 mm). */
+export type CargoKind = 'box' | 'pallet';
+
 export interface CargoItem {
   id: string;
   name: string;
@@ -51,6 +54,7 @@ export interface CargoItem {
   rotation: RotationRule;
   stackable: boolean; // may other cargo be placed on top of it
   floorOnly?: boolean; // must stand on the floor (pallets, heavy items)
+  kind?: CargoKind;    // how it is drawn; 'box' when missing
 }
 
 export type SupportKind = 'floor' | 'between_arches' | 'on_arch' | 'stacked';
@@ -68,6 +72,8 @@ export interface PlacedUnit {
   width: number;     // size along Y after rotation
   height: number;    // size along Z after rotation
   support: SupportKind;
+  kind?: CargoKind;      // drawing only
+  stackable?: boolean;   // drawing only (marks "do not stack")
 }
 
 export type UnplacedReason =

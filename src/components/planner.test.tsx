@@ -47,7 +47,7 @@ describe('planner panels', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'none' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj ładunek' }).at(-1)!);
 
-    expect(screen.getByText('Szafa')).toBeTruthy();
+    expect(screen.getAllByText('Szafa').length).toBeGreaterThanOrEqual(2); // cargo list + legend
     expect(screen.getByText('bez obracania')).toBeTruthy();
 
     await compute();
@@ -91,7 +91,7 @@ describe('pallet tab', () => {
     fireEvent.change(height, { target: { value: '1200' } });
     fireEvent.change(weight, { target: { value: '300' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj ładunek' }).at(-1)!);
-    expect(screen.getByText('Paleta EUR')).toBeTruthy();
+    expect(screen.getAllByText('Paleta EUR').length).toBeGreaterThanOrEqual(2); // cargo list + legend
     expect(screen.getByText('1200 × 800 × 1200 mm')).toBeTruthy();
     expect(screen.getAllByText('tylko podłoga').length).toBeGreaterThan(0);
   });

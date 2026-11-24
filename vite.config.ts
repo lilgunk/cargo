@@ -6,11 +6,15 @@ import react from '@vitejs/plugin-react'
 // GitHub Pages serves 404.html for unknown paths. A copy of index.html lets the
 // React router handle direct links and page refreshes (e.g. /login, /admin).
 function spaFallback(): Plugin {
+  let outDir = 'docs'
   return {
     name: 'spa-404-fallback',
     apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
     closeBundle() {
-      copyFileSync(resolve('docs/index.html'), resolve('docs/404.html'))
+      copyFileSync(resolve(outDir, 'index.html'), resolve(outDir, '404.html'))
     },
   }
 }
