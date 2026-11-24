@@ -240,6 +240,11 @@ export function LeftPanel({ store }: { store: CargoStore }) {
       {/* Cargo list */}
       <div className="flex flex-col px-4 pt-3">
         <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 mb-2">{t.left_list}</div>
+        {cargoItems.length === 0 && (
+          <p className="py-4 text-center text-[11px] leading-snug text-gray-400 dark:text-slate-500 border border-dashed border-gray-300 dark:border-slate-700 rounded-lg">
+            {t.left_list_empty}
+          </p>
+        )}
         <div className="space-y-1.5">
           {cargoItems.map(item => (
             <div key={item.id}

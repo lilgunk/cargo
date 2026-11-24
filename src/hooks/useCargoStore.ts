@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { SAMPLE_CARGO } from '../data/mockData';
 import { vehicleService } from '../services/vehicleService';
 import { DEFAULT_SUPPORT_RATIO } from '../algorithm/packCargo';
 import { verifyPacking } from '../algorithm/verifyPacking';
@@ -24,10 +23,11 @@ export interface NewCargo {
 
 export type { PlanResult };
 
-export function useCargoStore() {
+/** The planner starts with an empty cargo list (tests and the demo pass SAMPLE_CARGO). */
+export function useCargoStore(initialCargo: CargoItem[] = []) {
   const defaultVehicle = vehicleService.getDefault();
   const [vehicleId, setVehicleIdRaw] = useState<VehicleId>(defaultVehicle.id);
-  const [cargoItems, setCargoItems] = useState<CargoItem[]>(SAMPLE_CARGO);
+  const [cargoItems, setCargoItems] = useState<CargoItem[]>(initialCargo);
   const [plan, setPlanRaw] = useState<PlanResult | null>(null);
   const [step, setStepRaw] = useState(0);
 

@@ -3,12 +3,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest';
 import { SettingsProvider } from '../contexts/SettingsContext';
 import { useCargoStore } from '../hooks/useCargoStore';
+import { SAMPLE_CARGO } from '../data/mockData';
 import { LeftPanel } from './LeftPanel/LeftPanel';
 import { RightPanel } from './RightPanel/RightPanel';
 import { ContainerView } from './ContainerView/ContainerView';
 
 function Planner() {
-  const store = useCargoStore();
+  const store = useCargoStore(SAMPLE_CARGO);
   return (
     <>
       <LeftPanel store={store} />
@@ -27,7 +28,18 @@ async function compute() {
   await act(() => new Promise(r => setTimeout(r, 10)));
 }
 
+function EmptyPlanner() {
+  const store = useCargoStore();
+  return <><LeftPanel store={store} /><RightPanel store={store} /></>;
+}
+
 describe('planner panels', () => {
+  it('starts with no cargo: shows a hint and nothing to optimize', () => {
+    render(<SettingsProvider><EmptyPlanner /></SettingsProvider>);
+    expect(screen.getByText(/Brak ładunków/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Rozmieść ładunek/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('computes a plan for the sample cargo and shows the verifier result', async () => {
     setup();
     await compute();

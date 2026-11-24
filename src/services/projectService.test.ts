@@ -2,6 +2,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCargoStore } from '../hooks/useCargoStore';
+import { SAMPLE_CARGO } from '../data/mockData';
 import { buildProject, planToCsv, projectService, slugify } from './projectService';
 
 // In-memory stand-in for the Supabase `projects` table. Like Row Level Security,
@@ -37,7 +38,7 @@ beforeEach(() => { db.rows = []; db.uid = 'u1'; });
 
 describe('projectService', () => {
   it('returns the newest own project and replaces a project with the same id', async () => {
-    const { result } = renderHook(() => useCargoStore());
+    const { result } = renderHook(() => useCargoStore(SAMPLE_CARGO));
     const s = result.current;
     await projectService.save(buildProject('p1', 'Dostawa A', s.vehicle, s.cargoItems, null, new Date('2026-11-01')));
     await projectService.save(buildProject('p2', 'Dostawa B', s.vehicle, s.cargoItems, null, new Date('2026-11-02')));
@@ -51,14 +52,14 @@ describe('projectService', () => {
   });
 
   it('round-trips a computed plan; the restored plan passes the verifier', async () => {
-    const { result } = renderHook(() => useCargoStore());
+    const { result } = renderHook(() => useCargoStore(SAMPLE_CARGO));
     await act(async () => { await result.current.optimize(); });
     const s = result.current;
     expect(s.plan?.placed.length).toBeGreaterThan(0);
     await projectService.save(buildProject('p1', 'Test', s.vehicle, s.cargoItems, s.plan));
 
     const saved = await projectService.latest();
-    const fresh = renderHook(() => useCargoStore());
+    const fresh = renderHook(() => useCargoStore(SAMPLE_CARGO));
     act(() => fresh.result.current.loadProject(saved!));
     expect(fresh.result.current.placed).toEqual(s.placed);
     expect(fresh.result.current.plan?.violations).toEqual([]);
@@ -80,7 +81,7 @@ describe('projectService', () => {
 
 describe('useCargoStore', () => {
   it('gives unique ids to items added in the same moment (verifier stays at 0 violations)', async () => {
-    const { result } = renderHook(() => useCargoStore());
+    const { result } = renderHook(() => useCargoStore(SAMPLE_CARGO));
     act(() => {
       result.current.clearAll();
       for (let i = 0; i < 4; i++) {
