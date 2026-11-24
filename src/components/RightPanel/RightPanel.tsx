@@ -11,8 +11,8 @@ export function RightPanel({ store }: { store: CargoStore }) {
 
   function handleOptimize() {
     setOptimizing(true);
-    // let the spinner render, then compute (the heuristic itself takes milliseconds)
-    setTimeout(() => { store.optimize(); setOptimizing(false); }, 0);
+    // computed in a Web Worker — the UI stays responsive, the spinner keeps turning
+    void store.optimize().finally(() => setOptimizing(false));
   }
 
   // Status comes from the independent verifier, never from a guess about "optimality".

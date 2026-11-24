@@ -19,9 +19,9 @@ describe('projectService', () => {
     expect(projectService.latest('u3')).toBeUndefined();
   });
 
-  it('round-trips a computed plan; the restored plan passes the verifier', () => {
+  it('round-trips a computed plan; the restored plan passes the verifier', async () => {
     const { result } = renderHook(() => useCargoStore());
-    act(() => result.current.optimize());
+    await act(async () => { await result.current.optimize(); });
     const s = result.current;
     expect(s.plan?.placed.length).toBeGreaterThan(0);
     projectService.save('u1', buildProject('p1', 'Test', s.vehicle, s.cargoItems, s.plan));

@@ -50,6 +50,7 @@ export interface CargoItem {
   color: string;
   rotation: RotationRule;
   stackable: boolean; // may other cargo be placed on top of it
+  floorOnly?: boolean; // must stand on the floor (pallets, heavy items)
 }
 
 export type SupportKind = 'floor' | 'between_arches' | 'on_arch' | 'stacked';
@@ -74,6 +75,7 @@ export type UnplacedReason =
   | 'DOOR_OPENING'         // fits inside, but not through the rear door
   | 'PAYLOAD_EXCEEDED'     // would exceed the vehicle payload
   | 'NO_SPACE'             // no free room left
+  | 'NO_FLOOR_SPACE'       // must stand on the floor, but the floor is full
   | 'NOT_STACKABLE'        // only free room is on top of non-stackable cargo
   | 'INSUFFICIENT_SUPPORT' // would hang in the air (too little support)
   | 'UNSTABLE';            // centre of the base not over the support

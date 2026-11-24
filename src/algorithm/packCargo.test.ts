@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { CargoItem, Vehicle } from '../types';
-import { allowedDims, intersects, packCargo, packCargoBest, planQuality } from './packCargo';
+import { allowedDims, intersects, packCargo, packCargoBest, planQuality, portfolio } from './packCargo';
 import { verifyPacking } from './verifyPacking';
 
 const van = (o: Partial<Vehicle> = {}): Vehicle => ({
@@ -128,6 +128,7 @@ const itemsArb = fc.array(fc.record({
   length: fc.integer({ min: 50, max: 1600 }), width: fc.integer({ min: 50, max: 1200 }), height: fc.integer({ min: 50, max: 1200 }),
   weight: fc.integer({ min: 1, max: 300 }), quantity: fc.integer({ min: 1, max: 6 }),
   rotation: fc.constantFrom('none' as const, 'horizontal' as const, 'any' as const), stackable: fc.boolean(),
+  floorOnly: fc.boolean(),
 }), { maxLength: 10 }).map(rs => rs.map((r, i) => item({ id: `i${i}`, ...r })));
 
 describe('properties', () => {
@@ -147,12 +148,93 @@ describe('best-of portfolio', () => {
       const single = packCargo(items, v);
       expect(verifyPacking(items, v, best.placed, 0.75)).toEqual([]);
       expect(planQuality(best).volume).toBeGreaterThanOrEqual(planQuality(single).volume);
-      expect(best.variantsTried).toBe(20);
+      expect(best.variantsTried).toBe(portfolio().length);
     }), { numRuns: 150 });
   }, 120_000);
 
   it('is deterministic', () => {
     const items = [item({ id: 'a', quantity: 7, rotation: 'any', length: 600, width: 400, height: 300 }), item({ id: 'b', quantity: 4, length: 1200, width: 800, height: 900 })];
     expect(packCargoBest(items, van())).toEqual(packCargoBest(items, van()));
+  });
+});
+
+// ── reference: identical boxes in an empty van ───────────────────────────────
+
+/** Units that fit as a simple grid in one orientation — a known feasible lower bound of the optimum. */
+function gridBound(v: Vehicle, it: CargoItem): number {
+  return Math.max(0, ...allowedDims(it).map(d =>
+    Math.floor(v.length / d.l) * Math.floor(v.width / d.w) * Math.floor(v.height / d.h)));
+}
+
+describe('reference: never worse than a simple grid of identical boxes', () => {
+  it('places at least the grid bound (random sizes and rotation rules)', () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 150, max: 1200 }), fc.integer({ min: 150, max: 1000 }), fc.integer({ min: 150, max: 1000 }),
+      fc.constantFrom('none' as const, 'horizontal' as const, 'any' as const),
+      (l, w, h, rotation) => {
+        const v = van({ length: 4325, width: 1762, height: 1900, maxWeight: 1e9 });
+        const box = item({ id: 'b', length: l, width: w, height: h, rotation, weight: 1 });
+        const bound = gridBound(v, box);
+        fc.pre(bound > 0 && bound <= 300);
+        const r = packCargoBest([{ ...box, quantity: bound + 3 }], v);
+        expect(r.placed.length).toBeGreaterThanOrEqual(bound);
+        expect(verifyPacking([{ ...box, quantity: bound + 3 }], v, r.placed, 0.75)).toEqual([]);
+      }), { numRuns: 40 });
+  }, 300_000);
+
+  it('the case that used to lose 6 boxes (822×702×489): 36 placed', () => {
+    const v = van({ length: 4325, width: 1762, height: 1900, maxWeight: 1e9 });
+    const box = item({ id: 'b', length: 822, width: 702, height: 489, rotation: 'any', quantity: 41 });
+    expect(packCargoBest([box], v).placed.length).toBeGreaterThanOrEqual(36);
+  });
+});
+
+// ── non-standard (oversized / heavy) cargo in a Sprinter L3H2 ───────────────
+
+describe('non-standard cargo', () => {
+  const sprinter = van({
+    length: 4325, width: 1762, height: 1900, maxWeight: 1100, rearDoor: { width: 1540, height: 1820 },
+    wheelArches: [{ heightFromFloor: 270, intrusionPerSide: 265, startX: 2600, endX: 4000 }],
+  });
+  const one = (o: Partial<CargoItem>) => packCargoBest([item({ id: 'x', ...o })], sprinter);
+
+  it('a pipe longer than the cargo space is TOO_LARGE; a 4.3 m pipe lies lengthwise between the arches', () => {
+    expect(one({ length: 4400, width: 150, height: 150, rotation: 'any' }).unplaced[0].reason).toBe('TOO_LARGE');
+    expect(one({ length: 150, width: 4300, height: 150, rotation: 'any' }).placed[0]).toMatchObject({ length: 4300, z: 0, support: 'between_arches' });
+  });
+
+  it('a wardrobe taller than the door cannot go in upright, but can lying down', () => {
+    expect(one({ length: 600, width: 1000, height: 1850, rotation: 'horizontal' }).unplaced[0].reason).toBe('DOOR_OPENING');
+    expect(one({ length: 600, width: 1000, height: 1850, rotation: 'any' }).placed[0].height).toBeLessThanOrEqual(1820);
+  });
+
+  it('a board wider than the door goes in on its edge when allowed', () => {
+    expect(one({ length: 2500, width: 1700, height: 30, rotation: 'horizontal' }).unplaced[0].reason).toBe('DOOR_OPENING');
+    expect(one({ length: 2500, width: 1700, height: 30, rotation: 'any' }).placed[0].width).toBe(30);
+  });
+
+  it('pallets stand on the floor, nothing on them, payload respected', () => {
+    const pallets = item({ id: 'p', length: 1200, width: 800, height: 1500, weight: 400, quantity: 3, rotation: 'horizontal', stackable: false, floorOnly: true });
+    const r = packCargoBest([pallets], sprinter);
+    expect(r.placed).toHaveLength(2);
+    expect(r.placed.every(p => p.z === 0)).toBe(true);
+    expect(r.unplaced[0].reason).toBe('PAYLOAD_EXCEEDED');
+  });
+
+  it('floor-only cargo is never stacked; when the floor is full the reason says so', () => {
+    const v = van({ length: 1000, width: 1000, height: 2000, maxWeight: 1e9 });
+    const heavy = item({ id: 'h', length: 1000, width: 1000, height: 500, quantity: 2, rotation: 'none', floorOnly: true });
+    const r = packCargoBest([heavy], v);
+    expect(r.placed).toHaveLength(1);
+    expect(r.unplaced[0].reason).toBe('NO_FLOOR_SPACE');
+  });
+
+  it('heavy floor-only items go on the floor first, light boxes on top of them', () => {
+    const fridge = item({ id: 'f', length: 700, width: 700, height: 1800, weight: 90, quantity: 3, rotation: 'horizontal', stackable: false, floorOnly: true });
+    const boxes = item({ id: 'b', length: 600, width: 400, height: 400, weight: 10, quantity: 20 });
+    const r = packCargoBest([boxes, fridge], sprinter);
+    expect(r.unplaced).toEqual([]);
+    expect(r.placed.filter(p => p.cargoId === 'f').every(p => p.z === 0)).toBe(true);
+    expect(verifyPacking([boxes, fridge], sprinter, r.placed, 0.75)).toEqual([]);
   });
 });

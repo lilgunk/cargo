@@ -8,6 +8,15 @@ import type { RotationRule } from '../../types';
 
 type Tab = 'box' | 'pallet';
 
+// Standard pallet footprints (mm). Base height of a wooden pallet ≈ 144 mm.
+const PALLETS = {
+  eur: { length: 1200, width: 800 },
+  half: { length: 800, width: 600 },
+  industrial: { length: 1200, width: 1000 },
+} as const;
+type PalletType = keyof typeof PALLETS;
+const PALLET_BASE_HEIGHT = 144;
+
 function VanFrontSVG() {
   return (
     <svg viewBox="0 0 90 70" className="w-full h-full">
@@ -49,6 +58,9 @@ export function LeftPanel({ store }: { store: CargoStore }) {
   const [form, setForm] = useState({ name: '', length: '600', width: '400', height: '300', weight: '15', qty: '1' });
   const [rotation, setRotation] = useState<RotationRule>('horizontal');
   const [stackable, setStackable] = useState(true);
+  const [floorOnly, setFloorOnly] = useState(false);
+  const [palletType, setPalletType] = useState<PalletType>('eur');
+  const [palletStackable, setPalletStackable] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const totalWeight = cargoItems.reduce((s, c) => s + c.weight * c.quantity, 0);
@@ -56,19 +68,29 @@ export function LeftPanel({ store }: { store: CargoStore }) {
 
   function handleAdd() {
     setFormError(null);
-    const l = parseInt(form.length, 10), w = parseInt(form.width, 10);
+    const pallet = tab === 'pallet';
+    // A pallet: fixed footprint, total height entered, may turn 90°, always on the floor.
+    const l = pallet ? PALLETS[palletType].length : parseInt(form.length, 10);
+    const w = pallet ? PALLETS[palletType].width : parseInt(form.width, 10);
     const h = parseInt(form.height, 10), wt = parseFloat(form.weight.replace(',', '.'));
     const qty = parseInt(form.qty, 10);
     if (!(l > 0 && w > 0 && h > 0 && wt > 0 && qty > 0)) { setFormError(t.left_err_numbers); return; }
+    if (pallet && h <= PALLET_BASE_HEIGHT) { setFormError(t.left_err_pallet_height); return; }
+    const rot: RotationRule = pallet ? 'horizontal' : rotation;
 
     // Z4: the item must fit the cargo space in at least one allowed orientation.
-    const fits = allowedDims({ length: l, width: w, height: h, rotation })
+    const fits = allowedDims({ length: l, width: w, height: h, rotation: rot })
       .some(d => d.l <= vehicle.length && d.w <= vehicle.width && d.h <= vehicle.height);
     if (!fits) {
       setFormError(`${t.left_err_never_fits} (${vehicle.length} × ${vehicle.width} × ${vehicle.height} ${t.left_mm})`);
       return;
     }
-    addCargo({ name: form.name, length: l, width: w, height: h, weight: wt, quantity: qty, rotation, stackable });
+    const name = form.name.trim() || (pallet ? `${t.left_pallet} ${t[`left_pallet_${palletType}`]}` : '');
+    addCargo({
+      name, length: l, width: w, height: h, weight: wt, quantity: qty, rotation: rot,
+      stackable: pallet ? palletStackable : stackable,
+      floorOnly: pallet ? true : floorOnly,
+    });
     setForm(f => ({ ...f, name: '', qty: '1' }));
   }
 
@@ -146,13 +168,25 @@ export function LeftPanel({ store }: { store: CargoStore }) {
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             className={inputCls} />
         </div>
+        {tab === 'pallet' && (
+          <div className="mb-2">
+            <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_pallet_type}</label>
+            <select value={palletType} onChange={e => setPalletType(e.target.value as PalletType)} className={inputCls}>
+              {(Object.keys(PALLETS) as PalletType[]).map(p => (
+                <option key={p} value={p}>{t[`left_pallet_${p}`]} · {PALLETS[p].length}×{PALLETS[p].width}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2 mb-2">
-          {[
-            { label: t.left_length_mm, key: 'length' },
-            { label: t.left_width_mm,  key: 'width' },
-            { label: t.left_height_mm, key: 'height' },
-            { label: t.left_weight_kg, key: 'weight' },
-          ].map(({ label, key }) => (
+          {(tab === 'pallet'
+            ? [{ label: t.left_pallet_height, key: 'height' }, { label: t.left_weight_kg, key: 'weight' }]
+            : [
+              { label: t.left_length_mm, key: 'length' },
+              { label: t.left_width_mm,  key: 'width' },
+              { label: t.left_height_mm, key: 'height' },
+              { label: t.left_weight_kg, key: 'weight' },
+            ]).map(({ label, key }) => (
             <div key={key}>
               <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{label}</label>
               <input type="number" value={form[key as keyof typeof form]}
@@ -167,18 +201,34 @@ export function LeftPanel({ store }: { store: CargoStore }) {
             onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
             className={inputCls} />
         </div>
-        <div className="mb-2">
-          <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_rotation}</label>
-          <select value={rotation} onChange={e => setRotation(e.target.value as RotationRule)} className={inputCls}>
-            <option value="none">{t.left_rot_none}</option>
-            <option value="horizontal">{t.left_rot_horizontal}</option>
-            <option value="any">{t.left_rot_any}</option>
-          </select>
-        </div>
-        <label className="flex items-start gap-2 mb-3 text-[11px] text-gray-600 dark:text-slate-300 cursor-pointer">
-          <input type="checkbox" checked={stackable} onChange={e => setStackable(e.target.checked)} className="mt-0.5 accent-blue-600" />
-          {t.left_stackable}
-        </label>
+        {tab === 'box' ? (
+          <>
+            <div className="mb-2">
+              <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_rotation}</label>
+              <select value={rotation} onChange={e => setRotation(e.target.value as RotationRule)} className={inputCls}>
+                <option value="none">{t.left_rot_none}</option>
+                <option value="horizontal">{t.left_rot_horizontal}</option>
+                <option value="any">{t.left_rot_any}</option>
+              </select>
+            </div>
+            <label className="flex items-start gap-2 mb-1.5 text-[11px] text-gray-600 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={stackable} onChange={e => setStackable(e.target.checked)} className="mt-0.5 accent-blue-600" />
+              {t.left_stackable}
+            </label>
+            <label className="flex items-start gap-2 mb-3 text-[11px] text-gray-600 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={floorOnly} onChange={e => setFloorOnly(e.target.checked)} className="mt-0.5 accent-blue-600" />
+              {t.left_floor_only}
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="flex items-start gap-2 mb-1.5 text-[11px] text-gray-600 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={palletStackable} onChange={e => setPalletStackable(e.target.checked)} className="mt-0.5 accent-blue-600" />
+              {t.left_stackable}
+            </label>
+            <p className="mb-3 text-[10px] leading-snug text-gray-500 dark:text-slate-400">{t.left_pallet_note}</p>
+          </>
+        )}
         <button onClick={handleAdd}
           className="w-full py-2 rounded-lg bg-gray-900 dark:bg-blue-600 text-white text-xs font-medium hover:bg-gray-800 dark:hover:bg-blue-700 transition-colors">
           {t.left_add}
@@ -209,6 +259,9 @@ export function LeftPanel({ store }: { store: CargoStore }) {
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1">
                   <span className="px-1.5 py-px rounded text-[9px] bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{rotationShort[item.rotation]}</span>
+                  {item.floorOnly && (
+                    <span className="px-1.5 py-px rounded text-[9px] bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300">{t.left_floor_only_tag}</span>
+                  )}
                   {!item.stackable && (
                     <span className="px-1.5 py-px rounded text-[9px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t.left_not_stackable_tag}</span>
                   )}

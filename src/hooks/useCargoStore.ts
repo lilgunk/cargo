@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { SAMPLE_CARGO } from '../data/mockData';
 import { vehicleService } from '../services/vehicleService';
-import { DEFAULT_SUPPORT_RATIO, packCargoBest, type BestPlan } from '../algorithm/packCargo';
-import { verifyPacking, type Violation } from '../algorithm/verifyPacking';
+import { DEFAULT_SUPPORT_RATIO } from '../algorithm/packCargo';
+import { verifyPacking } from '../algorithm/verifyPacking';
+import { computePlan, type PlanResult } from '../algorithm/computePlan';
 import type { CargoItem, RotationRule, VehicleId } from '../types';
 import type { SavedProject } from '../services/projectService';
 
@@ -17,12 +18,10 @@ export interface NewCargo {
   quantity: number;
   rotation: RotationRule;
   stackable: boolean;
+  floorOnly?: boolean;
 }
 
-export interface PlanResult extends BestPlan {
-  violations: Violation[];
-  elapsedMs: number;
-}
+export type { PlanResult };
 
 export function useCargoStore() {
   const defaultVehicle = vehicleService.getDefault();
@@ -86,12 +85,9 @@ export function useCargoStore() {
     });
   }
 
-  function optimize() {
-    const t0 = performance.now();
-    const best = packCargoBest(cargoItems, vehicle, DEFAULT_SUPPORT_RATIO);
-    const elapsedMs = performance.now() - t0;
-    const violations = verifyPacking(cargoItems, vehicle, best.placed, DEFAULT_SUPPORT_RATIO);
-    setPlan({ ...best, violations, elapsedMs });
+  /** Computes the plan (in a Web Worker in the browser). */
+  async function optimize() {
+    setPlan(await computePlan(cargoItems, vehicle, DEFAULT_SUPPORT_RATIO));
   }
 
   const placed   = plan?.placed ?? [];

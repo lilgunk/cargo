@@ -33,7 +33,7 @@ describe('planner panels', () => {
     await compute();
     expect(screen.getByText('Sprawdzono: 0 naruszeń')).toBeTruthy();
     expect(screen.getByText('Wszystkie ładunki rozmieszczone')).toBeTruthy();
-    expect(screen.getByText(/Najlepszy z 20 wariantów/)).toBeTruthy();
+    expect(screen.getByText(/Najlepszy z \d+ wariantów/)).toBeTruthy();
   });
 
   it('adds a named item with constraints and explains why it does not fit', async () => {
@@ -80,5 +80,19 @@ describe('step-by-step preview', () => {
     fireEvent.click(screen.getByLabelText('Następny krok'));
     expect(text()).toBe('Krok 1 / 14');
     expect(screen.getByText(/bieżący krok/)).toBeTruthy();
+  });
+});
+
+describe('pallet tab', () => {
+  it('adds a EUR pallet that is floor-only and not stackable by default', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Paleta' }));
+    const [height, weight] = screen.getAllByRole('spinbutton');
+    fireEvent.change(height, { target: { value: '1200' } });
+    fireEvent.change(weight, { target: { value: '300' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj ładunek' }).at(-1)!);
+    expect(screen.getByText('Paleta EUR')).toBeTruthy();
+    expect(screen.getByText('1200 × 800 × 1200 mm')).toBeTruthy();
+    expect(screen.getAllByText('tylko podłoga').length).toBeGreaterThan(0);
   });
 });

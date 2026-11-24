@@ -15,6 +15,7 @@ export type ViolationCode =
   | 'CARGO_COLLISION'
   | 'DOOR_OPENING'
   | 'NOT_STACKABLE'
+  | 'FLOOR_ONLY'
   | 'NO_SUPPORT'
   | 'UNSTABLE'
   | 'LOADING_ORDER'
@@ -78,6 +79,7 @@ export function verifyPacking(items: CargoItem[], vehicle: Vehicle, placed: Plac
     if (arches.some(a => solidOverlap(r, a))) out.push({ code: 'ARCH_COLLISION', step: u.step });
     for (let j = 0; j < i; j++) if (solidOverlap(r, rs[j])) out.push({ code: 'CARGO_COLLISION', step: u.step });
 
+    if (item.floorOnly && r.z0 > 0) out.push({ code: 'FLOOR_ONLY', step: u.step });
     if (r.z0 > 0) {
       let area = 0;
       const pts: { x: number; y: number }[] = [];

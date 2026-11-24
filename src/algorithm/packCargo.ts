@@ -24,6 +24,13 @@ export interface PackOptions {
   supportRatio?: number;
   sortBy?: SortRule;
   positions?: PositionRule;
+  /**
+   * Preferred orientation: index into the item's allowed orientations (taken
+   * modulo their count). Every unit of a type then uses the same orientation
+   * whenever it fits, so identical boxes form regular rows instead of a mix.
+   * Undefined → at each point the lowest orientation is preferred.
+   */
+  orientation?: number;
 }
 
 const SORT_VALUE: Record<SortRule, (i: CargoItem) => number> = {
@@ -97,7 +104,7 @@ export function wheelArchBoxes(vehicle: Vehicle): Box[] {
   });
 }
 
-/** Orientations allowed by the item's rotation rule (duplicates removed). */
+/** Orientations allowed by the item's rotation rule (duplicates removed, fixed order). */
 export function allowedDims(item: Pick<CargoItem, 'length' | 'width' | 'height' | 'rotation'>): Dims[] {
   const { length: L, width: W, height: H } = item;
   const all: [number, number, number][] =
@@ -119,7 +126,7 @@ interface Placed extends Box {
 
 type Check = { ok: true; support: SupportKind } | { ok: false; hadRoom: boolean; reason: UnplacedReason };
 
-/** Unprojected corner + projections on the nearest faces (Extreme Points). */
+/** Unprojected corners + their projections on the nearest faces (Extreme Points). */
 function extremePoints(b: Box, solids: Box[]): Point[] {
   const project = (p: Point, axis: 'x' | 'y' | 'z'): Point => {
     let stop = 0;
@@ -150,18 +157,19 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
   const maxContact = options.positions === 'max-contact';
   const arches = wheelArchBoxes(vehicle);
   const placed: Placed[] = [];
+  const solids: Box[] = [...arches];        // arches + placed cargo, kept up to date
   const unplaced: UnplacedUnit[] = [];
   let points: Point[] = [];
+  const pointKeys = new Set<string>();
   let placedWeight = 0;
 
-  const solids = (): Box[] => [...arches, ...placed];
-
   function addPoints(ps: Point[]) {
-    const all = solids();
     for (const p of ps) {
       if (p.x >= vehicle.length || p.y >= vehicle.width || p.z >= vehicle.height) continue;
-      if (all.some(s => containsPoint(s, p))) continue;
-      if (points.some(q => q.x === p.x && q.y === p.y && q.z === p.z)) continue;
+      const k = `${p.x},${p.y},${p.z}`;
+      if (pointKeys.has(k)) continue;
+      if (solids.some(s => containsPoint(s, p))) continue;
+      pointKeys.add(k);
       points.push(p);
     }
   }
@@ -174,10 +182,10 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
       return { ok: false, hadRoom: false, reason: 'NO_SPACE' };
     }
     // no collisions with arches or other cargo
-    if (solids().some(s => intersects(box, s))) return { ok: false, hadRoom: false, reason: 'NO_SPACE' };
+    for (const s of solids) if (intersects(box, s)) return { ok: false, hadRoom: false, reason: 'NO_SPACE' };
     // loading order: cannot be slid underneath cargo that is already in place
-    if (placed.some(s => s.z === box.z + box.h && footprintOverlap(box, s) > 0)) {
-      return { ok: false, hadRoom: false, reason: 'NO_SPACE' };
+    for (const s of placed) {
+      if (s.z === box.z + box.h && footprintOverlap(box, s) > 0) return { ok: false, hadRoom: false, reason: 'NO_SPACE' };
     }
     if (box.z === 0) {
       const inArchZone = arches.some(a => overlap1D(box.x, box.x + box.l, a.x, a.x + a.l) > 0);
@@ -220,7 +228,7 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     if (b.y === 0) a += b.l * b.h;
     if (b.y + b.w === vehicle.width) a += b.l * b.h;
     if (b.z + b.h === vehicle.height) a += b.l * b.w;
-    for (const s of solids()) {
+    for (const s of solids) {
       const ox = overlap1D(b.x, b.x + b.l, s.x, s.x + s.l);
       const oy = overlap1D(b.y, b.y + b.w, s.y, s.y + s.w);
       const oz = overlap1D(b.z, b.z + b.h, s.z, s.z + s.h);
@@ -231,6 +239,15 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     return a;
   }
 
+  /** Orientations to try, best first. */
+  function orientationsFor(item: CargoItem, dims: Dims[]): Dims[] {
+    if (options.orientation === undefined) return [...dims].sort((a, b) => a.h - b.h);
+    const all = allowedDims(item);
+    const preferred = all[options.orientation % all.length];
+    const first = dims.find(d => d.l === preferred.l && d.w === preferred.w && d.h === preferred.h);
+    return first ? [first, ...dims.filter(d => d !== first).sort((a, b) => a.h - b.h)] : [...dims].sort((a, b) => a.h - b.h);
+  }
+
   function place(item: CargoItem): UnplacedReason | null {
     const fitting = allowedDims(item).filter(d => d.l <= vehicle.length && d.w <= vehicle.width && d.h <= vehicle.height);
     if (fitting.length === 0) return 'TOO_LARGE';
@@ -239,22 +256,28 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     if (throughDoor.length === 0) return 'DOOR_OPENING';
     if (placedWeight + item.weight > vehicle.maxWeight) return 'PAYLOAD_EXCEEDED';
 
-    const order = [...points].sort(positionOrder);
+    const dims = orientationsFor(item, throughDoor);
+    const candidates = (item.floorOnly ? points.filter(p => p.z === 0) : points).sort(positionOrder);
     const counts = new Map<UnplacedReason, number>();
     const commit = (p: Point, d: Dims, support: SupportKind) => {
       const box: Placed = { ...p, ...d, item, support };
       placed.push(box);
+      solids.push(box);
       placedWeight += item.weight;
-      points = points.filter(q => !containsPoint(box, q));
-      addPoints(extremePoints(box, solids()));
+      points = points.filter(q => {
+        if (!containsPoint(box, q)) return true;
+        pointKeys.delete(`${q.x},${q.y},${q.z}`);
+        return false;
+      });
+      addPoints(extremePoints(box, solids));
     };
 
     if (maxContact) {
       // Evaluate every feasible (point, orientation) and keep the one touching the most
       // surfaces (floor, walls, arches, other cargo); ties keep the floor-first order.
       let best: { p: Point; d: Dims; support: SupportKind; score: number } | null = null;
-      for (const p of order) {
-        for (const d of throughDoor) {
+      for (const p of candidates) {
+        for (const d of dims) {
           const r = check(d, p);
           if (r.ok) {
             const score = contactArea({ ...p, ...d });
@@ -266,20 +289,16 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
       }
       if (best) { commit(best.p, best.d, best.support); return null; }
     } else {
-      for (const p of order) {
-        let best: { d: Dims; support: SupportKind } | null = null;
-        for (const d of throughDoor) {
+      // First point (in the chosen order) where some orientation fits; orientations in preference order.
+      for (const p of candidates) {
+        for (const d of dims) {
           const r = check(d, p);
-          if (r.ok) {
-            // tie-break between orientations at the same point: lower height first (more stable)
-            if (!best || d.h < best.d.h) best = { d, support: r.support };
-          } else if (r.hadRoom) {
-            counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
-          }
+          if (r.ok) { commit(p, d, r.support); return null; }
+          if (r.hadRoom) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
         }
-        if (best) { commit(p, best.d, best.support); return null; }
       }
     }
+    if (item.floorOnly) return 'NO_FLOOR_SPACE';
     // There was room somewhere but a stacking rule forbade it → report that rule, else no room.
     let reason: UnplacedReason = 'NO_SPACE';
     let max = 0;
@@ -295,9 +314,16 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     b.item.weight - a.item.weight ||
     a.index - b.index);
 
+  // Identical units fail identically as long as nothing new was placed (payload included).
+  let lastFail: { item: CargoItem; placedCount: number; reason: UnplacedReason } | null = null;
   for (const { item } of units) {
-    const reason = place(item);
-    if (reason) unplaced.push({ cargoId: item.id, name: item.name, reason });
+    let reason: UnplacedReason | null;
+    if (lastFail && lastFail.item === item && lastFail.placedCount === placed.length) reason = lastFail.reason;
+    else reason = place(item);
+    if (reason) {
+      unplaced.push({ cargoId: item.id, name: item.name, reason });
+      lastFail = { item, placedCount: placed.length, reason };
+    }
   }
 
   const result: PlacedUnit[] = placed.map((b, i) => ({
@@ -338,29 +364,38 @@ function better(a: PlanQuality, b: PlanQuality): boolean {
   return a.comZ < b.comZ - 1e-9;
 }
 
-export interface BestPlan extends PackingResult {
-  sortBy: SortRule;
-  positions: PositionRule;
+export interface Variant { sortBy: SortRule; positions: PositionRule; orientation?: number }
+
+export interface BestPlan extends PackingResult, Variant {
   variantsTried: number;
 }
 
+/** The deterministic list of variants tried by packCargoBest. */
+export function portfolio(): Variant[] {
+  const out: Variant[] = [];
+  for (const positions of POSITION_RULES) for (const sortBy of SORT_RULES) out.push({ sortBy, positions });
+  // Uniform orientation per item type: keeps identical boxes in regular rows.
+  for (const positions of ['floor-first', 'cab-first', 'wall-first'] as PositionRule[]) {
+    for (let orientation = 0; orientation < 6; orientation++) out.push({ sortBy: 'volume', positions, orientation });
+  }
+  return out;
+}
+
 /**
- * Runs the heuristic for every combination of sorting and position rules
- * (5 × 4 = 20 deterministic runs) and keeps the best plan. Still a heuristic:
- * the result is the best of the tried variants, not a proven optimum.
+ * Runs the heuristic for every variant of portfolio() and keeps the best plan.
+ * Still a heuristic: the best of the tried variants, not a proven optimum.
  */
 export function packCargoBest(items: CargoItem[], vehicle: Vehicle, supportRatio = DEFAULT_SUPPORT_RATIO): BestPlan {
+  const variants = portfolio();
   let best: BestPlan | null = null;
   let bestQ: PlanQuality | null = null;
-  for (const positions of POSITION_RULES) {
-    for (const sortBy of SORT_RULES) {
-      const r = packCargo(items, vehicle, { supportRatio, sortBy, positions });
-      const q = planQuality(r);
-      if (!best || better(q, bestQ!)) {
-        best = { ...r, sortBy, positions, variantsTried: 0 };
-        bestQ = q;
-      }
+  for (const v of variants) {
+    const r = packCargo(items, vehicle, { supportRatio, ...v });
+    const q = planQuality(r);
+    if (!best || better(q, bestQ!)) {
+      best = { ...r, ...v, variantsTried: variants.length };
+      bestQ = q;
     }
   }
-  return { ...best!, variantsTried: SORT_RULES.length * POSITION_RULES.length };
+  return best!;
 }
