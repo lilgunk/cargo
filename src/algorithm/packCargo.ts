@@ -442,13 +442,20 @@ export interface BestPlan extends PackingResult, Variant {
 
 /** The deterministic list of variants tried by packCargoBest. */
 export function portfolio(): Variant[] {
+  // Ordered cheap → expensive, so that under the time budget (large cargo lists) the
+  // variants that usually win run first. Measured for 999 identical boxes: the point-order
+  // rules take 0.06–0.4 s, max-contact ≈ 4 s per run (it scores every point).
+  const fast: PositionRule[] = ['floor-first', 'cab-first', 'wall-first'];
   const out: Variant[] = [];
   for (const nonStackableLast of [false, true]) {
-    for (const positions of POSITION_RULES) for (const sortBy of SORT_RULES) out.push({ sortBy, positions, nonStackableLast });
+    for (const positions of fast) for (const sortBy of SORT_RULES) out.push({ sortBy, positions, nonStackableLast });
   }
   // Uniform orientation per item type: keeps identical boxes in regular rows.
-  for (const positions of ['floor-first', 'cab-first', 'wall-first'] as PositionRule[]) {
+  for (const positions of fast) {
     for (let orientation = 0; orientation < 6; orientation++) out.push({ sortBy: 'volume', positions, orientation, nonStackableLast: true });
+  }
+  for (const nonStackableLast of [false, true]) {
+    for (const sortBy of SORT_RULES) out.push({ sortBy, positions: 'max-contact', nonStackableLast });
   }
   return out;
 }
