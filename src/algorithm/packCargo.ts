@@ -31,6 +31,12 @@ export interface PackOptions {
    * Undefined → at each point the lowest orientation is preferred.
    */
   orientation?: number;
+  /**
+   * Pack "do not stack" cargo after everything else, so it ends up on top of
+   * the stacks (nothing may stand on it anyway) instead of wasting the space
+   * above it on the floor. Floor-only cargo is always packed first.
+   */
+  nonStackableLast?: boolean;
 }
 
 const SORT_VALUE: Record<SortRule, (i: CargoItem) => number> = {
@@ -272,15 +278,18 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
       addPoints(extremePoints(box, solids));
     };
 
-    if (maxContact) {
-      // Evaluate every feasible (point, orientation) and keep the one touching the most
-      // surfaces (floor, walls, arches, other cargo); ties keep the floor-first order.
+    // "Do not stack" cargo packed last goes as high as possible: nothing may stand on it,
+    // so the higher it is, the less space above it is lost.
+    const preferHigh = !!options.nonStackableLast && !item.stackable && !item.floorOnly;
+    if (maxContact || preferHigh) {
+      // Evaluate every feasible (point, orientation) and keep the best one: the most contact
+      // with floor, walls, arches and cargo — or the highest spot; ties keep the point order.
       let best: { p: Point; d: Dims; support: SupportKind; score: number } | null = null;
       for (const p of candidates) {
         for (const d of dims) {
           const r = check(d, p);
           if (r.ok) {
-            const score = contactArea({ ...p, ...d });
+            const score = preferHigh ? p.z + d.h : contactArea({ ...p, ...d });
             if (!best || score > best.score) best = { p, d, support: r.support, score };
           } else if (r.hadRoom) {
             counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
@@ -306,9 +315,12 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     return reason;
   }
 
-  // Units sorted by the chosen rule (largest first), then by volume, weight and input order.
+  // Groups: floor-only first (they need the floor), then normal cargo, then — optionally —
+  // "do not stack" cargo. Inside a group: the chosen rule (largest first), volume, weight, input order.
+  const group = (i: CargoItem) => (i.floorOnly ? 0 : options.nonStackableLast && !i.stackable ? 2 : 1);
   const units = items.flatMap((item, index) => Array.from({ length: item.quantity }, () => ({ item, index })));
   units.sort((a, b) =>
+    group(a.item) - group(b.item) ||
     sortValue(b.item) - sortValue(a.item) ||
     SORT_VALUE.volume(b.item) - SORT_VALUE.volume(a.item) ||
     b.item.weight - a.item.weight ||
@@ -326,7 +338,7 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     }
   }
 
-  const result: PlacedUnit[] = placed.map((b, i) => ({
+  const result: PlacedUnit[] = loadingSequence(placed).map((b, i) => ({
     step: i + 1,
     cargoId: b.item.id,
     name: b.item.name,
@@ -337,8 +349,40 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     support: b.support,
     kind: b.item.kind ?? 'box',
     stackable: b.item.stackable,
+    floorOnly: b.item.floorOnly ?? false,
   }));
   return { placed: result, unplaced };
+}
+
+// ── loading sequence ─────────────────────────────────────────────────────────
+
+/**
+ * Order in which the units are actually loaded through the rear doors.
+ *
+ * The search places units in its own order (e.g. the whole floor first); a real
+ * loader builds walls from the cab towards the doors instead. Each step takes
+ * the unit closest to the cab (then lowest, then leftmost) among those whose
+ * supports are already loaded — so a column at the cab is finished bottom-to-top
+ * before the loader moves back, and nothing is ever loaded before its support.
+ */
+export function loadingSequence<T extends Box>(boxes: T[]): T[] {
+  const supports = boxes.map(b => boxes
+    .map((s, j) => ({ s, j }))
+    .filter(({ s }) => s !== b && s.z + s.h === b.z && footprintOverlap(b, s) > 0)
+    .map(({ j }) => j));
+  const closerToCab = (a: Box, b: Box) => (a.x !== b.x ? a.x < b.x : a.z !== b.z ? a.z < b.z : a.y < b.y);
+  const done = new Array(boxes.length).fill(false);
+  const out: T[] = [];
+  while (out.length < boxes.length) {
+    let pick = -1;
+    for (let i = 0; i < boxes.length; i++) {
+      if (done[i] || !supports[i].every(j => done[j])) continue;
+      if (pick < 0 || closerToCab(boxes[i], boxes[pick])) pick = i;
+    }
+    done[pick] = true;
+    out.push(boxes[pick]);
+  }
+  return out;
 }
 
 // ── portfolio ────────────────────────────────────────────────────────────────
@@ -346,27 +390,48 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
 export const SORT_RULES: SortRule[] = ['volume', 'baseArea', 'height', 'longestEdge', 'weight'];
 export const POSITION_RULES: PositionRule[] = ['floor-first', 'cab-first', 'wall-first', 'max-contact'];
 
-export interface PlanQuality { volume: number; units: number; weight: number; comZ: number }
+export interface PlanQuality {
+  volume: number;
+  units: number;
+  weight: number;
+  /** floor taken by "do not stack" cargo that is allowed higher up (mm²) — floor is the most valuable space */
+  blockedFloor: number;
+  /** empty space above "do not stack" cargo up to the roof — unusable (mm³) */
+  deadSpace: number;
+  /** how far from the cab the cargo reaches (mm) — less = more free floor at the doors */
+  loadingLength: number;
+  comZ: number;
+}
 
-export function planQuality(r: PackingResult): PlanQuality {
-  let volume = 0, weight = 0, mz = 0;
+export function planQuality(r: PackingResult, vehicleHeight = 0): PlanQuality {
+  let volume = 0, weight = 0, mz = 0, deadSpace = 0, loadingLength = 0, blockedFloor = 0;
   for (const u of r.placed) {
     volume += u.length * u.width * u.height;
     weight += u.weight;
     mz += u.weight * (u.z + u.height / 2);
+    if (u.stackable === false) deadSpace += u.length * u.width * Math.max(0, vehicleHeight - u.z - u.height);
+    if (u.stackable === false && !u.floorOnly && u.z === 0) blockedFloor += u.length * u.width;
+    loadingLength = Math.max(loadingLength, u.x + u.length);
   }
-  return { volume, units: r.placed.length, weight, comZ: weight > 0 ? mz / weight : 0 };
+  return { volume, units: r.placed.length, weight, blockedFloor, deadSpace, loadingLength, comZ: weight > 0 ? mz / weight : 0 };
 }
 
-/** a better than b: more volume loaded, then more units, then more mass, then lower centre of mass. */
+/**
+ * a better than b: more volume loaded, more units, more mass; on a tie: less
+ * floor taken by "do not stack" cargo, less wasted space above it, a shorter
+ * loading length (free floor at the doors), then a lower centre of mass.
+ */
 function better(a: PlanQuality, b: PlanQuality): boolean {
   if (a.volume !== b.volume) return a.volume > b.volume;
   if (a.units !== b.units) return a.units > b.units;
   if (a.weight !== b.weight) return a.weight > b.weight;
+  if (a.blockedFloor !== b.blockedFloor) return a.blockedFloor < b.blockedFloor;
+  if (a.deadSpace !== b.deadSpace) return a.deadSpace < b.deadSpace;
+  if (a.loadingLength !== b.loadingLength) return a.loadingLength < b.loadingLength;
   return a.comZ < b.comZ - 1e-9;
 }
 
-export interface Variant { sortBy: SortRule; positions: PositionRule; orientation?: number }
+export interface Variant { sortBy: SortRule; positions: PositionRule; orientation?: number; nonStackableLast?: boolean }
 
 export interface BestPlan extends PackingResult, Variant {
   variantsTried: number;
@@ -375,10 +440,12 @@ export interface BestPlan extends PackingResult, Variant {
 /** The deterministic list of variants tried by packCargoBest. */
 export function portfolio(): Variant[] {
   const out: Variant[] = [];
-  for (const positions of POSITION_RULES) for (const sortBy of SORT_RULES) out.push({ sortBy, positions });
+  for (const nonStackableLast of [false, true]) {
+    for (const positions of POSITION_RULES) for (const sortBy of SORT_RULES) out.push({ sortBy, positions, nonStackableLast });
+  }
   // Uniform orientation per item type: keeps identical boxes in regular rows.
   for (const positions of ['floor-first', 'cab-first', 'wall-first'] as PositionRule[]) {
-    for (let orientation = 0; orientation < 6; orientation++) out.push({ sortBy: 'volume', positions, orientation });
+    for (let orientation = 0; orientation < 6; orientation++) out.push({ sortBy: 'volume', positions, orientation, nonStackableLast: true });
   }
   return out;
 }
@@ -393,7 +460,7 @@ export function packCargoBest(items: CargoItem[], vehicle: Vehicle, supportRatio
   let bestQ: PlanQuality | null = null;
   for (const v of variants) {
     const r = packCargo(items, vehicle, { supportRatio, ...v });
-    const q = planQuality(r);
+    const q = planQuality(r, vehicle.height);
     if (!best || better(q, bestQ!)) {
       best = { ...r, ...v, variantsTried: variants.length };
       bestQ = q;

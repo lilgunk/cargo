@@ -238,3 +238,52 @@ describe('non-standard cargo', () => {
     expect(verifyPacking([boxes, fridge], sprinter, r.placed, 0.75)).toEqual([]);
   });
 });
+
+// ── "do not stack" cargo goes on top; loading sequence goes wall by wall ─────
+
+describe('author feedback (2026-11-24)', () => {
+  it('"do not stack" cargo is put on top of the stacks, not on the floor wasting the space above it', () => {
+    const v = van({ length: 2000, width: 1000, height: 1000, maxWeight: 1e9 });
+    // listed first on purpose: before the fix it took the floor
+    const fragile = item({ id: 'fragile', length: 500, width: 1000, height: 500, quantity: 2, rotation: 'none', stackable: false });
+    const boxes = item({ id: 'box', length: 500, width: 1000, height: 500, quantity: 4, rotation: 'none' });
+    const r = packCargoBest([fragile, boxes], v);
+    expect(r.unplaced).toEqual([]);
+    expect(r.placed.filter(p => p.cargoId === 'fragile').every(p => p.z === 500)).toBe(true);
+    expect(verifyPacking([fragile, boxes], v, r.placed, 0.75)).toEqual([]);
+  });
+
+  it('the Sprinter case from the screenshot: the non-stackable Box C ends up on top', () => {
+    const sprinter = van({ length: 4325, width: 1762, height: 1900, maxWeight: 1100, rearDoor: { width: 1540, height: 1820 },
+      wheelArches: [{ heightFromFloor: 270, intrusionPerSide: 265, startX: 2600, endX: 4000 }] });
+    const items = [
+      item({ id: 'A', length: 600, width: 400, height: 300, weight: 15, quantity: 8, rotation: 'any' }),
+      item({ id: 'B', length: 800, width: 600, height: 400, weight: 25, quantity: 4, rotation: 'horizontal' }),
+      item({ id: 'C', length: 1000, width: 500, height: 500, weight: 30, quantity: 2, rotation: 'horizontal', stackable: false }),
+    ];
+    const r = packCargoBest(items, sprinter);
+    expect(r.unplaced).toEqual([]);
+    expect(r.placed.filter(p => p.cargoId === 'C').every(p => p.z > 0)).toBe(true);
+    expect(verifyPacking(items, sprinter, r.placed, 0.75)).toEqual([]);
+  });
+
+  it('loading steps build walls from the cab: a column is finished before moving towards the doors', () => {
+    const v = van({ length: 1000, width: 500, height: 1000, maxWeight: 1e9 });
+    const r = packCargoBest([item({ id: 'b', quantity: 4, rotation: 'none' })], v);
+    expect(r.placed.map(p => [p.x, p.z])).toEqual([[0, 0], [0, 500], [500, 0], [500, 500]]);
+  });
+
+  it('every unit is loaded after everything it stands on (random plans)', () => {
+    fc.assert(fc.property(vanArb, itemsArb, (v, items) => {
+      const r = packCargoBest(items, v);
+      for (const u of r.placed) {
+        for (const s of r.placed) {
+          const touches = s.z + s.height === u.z &&
+            Math.min(u.x + u.length, s.x + s.length) > Math.max(u.x, s.x) &&
+            Math.min(u.y + u.width, s.y + s.width) > Math.max(u.y, s.y);
+          if (touches) expect(s.step).toBeLessThan(u.step);
+        }
+      }
+    }), { numRuns: 60 });
+  }, 300_000);
+});

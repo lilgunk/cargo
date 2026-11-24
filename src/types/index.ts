@@ -74,6 +74,7 @@ export interface PlacedUnit {
   support: SupportKind;
   kind?: CargoKind;      // drawing only
   stackable?: boolean;   // drawing only (marks "do not stack")
+  floorOnly?: boolean;
 }
 
 export type UnplacedReason =
