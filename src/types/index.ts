@@ -97,11 +97,3 @@ export interface PackingResult {
   placed: PlacedUnit[];
   unplaced: UnplacedUnit[];
 }
-
-export interface PlacementStep {
-  stepIndex: number;
-  cargoId: string;
-  cargoName: string;
-  position: { x: number; y: number; z: number };
-  description: string;
-}

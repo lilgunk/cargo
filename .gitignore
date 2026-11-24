@@ -12,10 +12,6 @@ dist
 dist-ssr
 *.local
 
-# Server
-server/node_modules
-server/users.db
-
 # Claude Code
 .claude/
 

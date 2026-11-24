@@ -1,4 +1,4 @@
-import type { Vehicle, CargoItem, PlacementStep } from '../types';
+import type { Vehicle, CargoItem } from '../types';
 
 // ---------------------------------------------------------------------------
 // VEHICLES
@@ -165,46 +165,5 @@ export const SAMPLE_CARGO: CargoItem[] = [
     color: '#fbbf24',
     rotation: 'horizontal',
     stackable: false,
-  },
-];
-
-// ---------------------------------------------------------------------------
-// MOCK_STEPS — kept for StepsPanel (currently hidden)
-// ---------------------------------------------------------------------------
-export const MOCK_STEPS: PlacementStep[] = [
-  {
-    stepIndex: 1,
-    cargoId: 'box-1',
-    cargoName: 'Box A · 600×400×300',
-    position: { x: 0, y: 0, z: 0 },
-    description: 'Placed at front wall, on floor',
-  },
-  {
-    stepIndex: 2,
-    cargoId: 'box-2',
-    cargoName: 'Box B · 800×600×400',
-    position: { x: 600, y: 0, z: 0 },
-    description: 'Next to Box A, on floor',
-  },
-  {
-    stepIndex: 3,
-    cargoId: 'box-3',
-    cargoName: 'Box C · 1000×500×500',
-    position: { x: 1400, y: 0, z: 0 },
-    description: 'First row complete, on floor',
-  },
-  {
-    stepIndex: 4,
-    cargoId: 'box-1',
-    cargoName: 'Box A · 600×400×300',
-    position: { x: 0, y: 800, z: 0 },
-    description: 'Second row, on floor',
-  },
-  {
-    stepIndex: 5,
-    cargoId: 'box-1',
-    cargoName: 'Box A · 600×400×300',
-    position: { x: 0, y: 0, z: 300 },
-    description: 'Second layer, above Box A',
   },
 ];

@@ -275,3 +275,11 @@ src/
 - Удалены `utils/password.ts` и localStorage-аккаунты. Тесты: Supabase подменяется (`vi.mock('../lib/supabase')`).
 - Первый админ: после регистрации в SQL Editor `update public.profiles set role = 'admin' where email = '…';`
 - Встроенная почта Supabase шлёт письма только участникам команды проекта и ~2 в час; для писем любым пользователям нужен свой SMTP (Auth → Emails → SMTP Settings).
+
+---
+
+### Этап 10 — Уборка (2026-11-24)
+
+- Хостинг только Cloudflare Pages: сборка в `dist/` (стандарт Vite), `docs/` больше не в репозитории, удалены `public/CNAME` (мёртвый домен) и плагин копирования `404.html` для GitHub Pages. Старые проекты Vercel удалены.
+- Удалён неиспользуемый код: `components/Sidebar`, `components/StatsPanel`, `components/StepsPanel` (заменён `StepBar`), `pages/DashboardPage.tsx`, `MOCK_STEPS` и тип `PlacementStep`.
+- README — описание проекта вместо шаблона Vite.
