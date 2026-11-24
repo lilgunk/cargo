@@ -1,6 +1,9 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { hashPassword, verifyPassword } from '../utils/password';
+import { supabase } from '../lib/supabase';
+
+// Accounts are Supabase Auth users (hashed passwords, e-mail confirmation);
+// name and role come from public.profiles (see supabase/migrations).
 
 export interface User {
   id: string;
@@ -10,92 +13,128 @@ export interface User {
   createdAt: string;
 }
 
-// Only a PBKDF2 hash and its salt are stored. `password` is the legacy plain-text
-// field of accounts created before hashing; it is replaced on the next login.
-interface StoredUser extends User {
-  passwordHash?: string;
-  salt?: string;
-  password?: string;
+/** Error codes shown to the user in their language (translations: auth_err_*). */
+export type AuthErrorCode =
+  | 'invalid_credentials'
+  | 'email_not_confirmed'
+  | 'weak_password'
+  | 'rate_limited'
+  | 'network'
+  | 'unknown';
+
+export class AuthFailure extends Error {
+  readonly code: AuthErrorCode;
+  constructor(code: AuthErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
 }
 
-/** User data without any secrets (safe for the session and the UI). */
-export function toPublicUser(u: StoredUser): User {
-  return { id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt };
+function toFailure(error: { code?: string; message?: string; status?: number } | null): AuthFailure {
+  const code = error?.code ?? '';
+  const msg = error?.message ?? '';
+  if (code === 'invalid_credentials' || msg === 'Invalid login credentials') return new AuthFailure('invalid_credentials');
+  if (code === 'email_not_confirmed' || /not confirmed/i.test(msg)) return new AuthFailure('email_not_confirmed');
+  if (code === 'weak_password' || /password should/i.test(msg)) return new AuthFailure('weak_password', msg);
+  if (code.startsWith('over_') || error?.status === 429) return new AuthFailure('rate_limited');
+  if (/fetch|network/i.test(msg)) return new AuthFailure('network');
+  return new AuthFailure('unknown', msg);
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  /** true after the user opened a password-reset link (show the new-password form) */
+  passwordRecovery: boolean;
+  /** true when the app was opened from an e-mail link that is expired or already used */
+  linkError: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  /** Returns true when the account still has to be confirmed by e-mail. */
+  register: (name: string, email: string, password: string) => Promise<boolean>;
+  resendConfirmation: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const ADMIN_EMAIL = 'admin@loadopti.com';
-const USERS_KEY = 'lo_users';
-const SESSION_KEY = 'lo_session';
+/** Where links from e-mails lead back to (the current site, works on any domain). */
+const siteUrl = (path: string) => `${window.location.origin}${path}`;
 
-export function getStoredUsers(): StoredUser[] {
-  try { return JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]'); } catch { return []; }
-}
-export function saveStoredUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+/** Supabase reports a bad e-mail link as #error_code=… in the URL it redirects to. */
+const hasLinkError = () => new URLSearchParams(window.location.hash.slice(1)).has('error_code');
 
-function readSession(): User | null {
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try { return JSON.parse(raw) as User; } catch { localStorage.removeItem(SESSION_KEY); return null; }
+async function fetchProfile(id: string, fallbackEmail: string): Promise<User> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, name, email, role, created_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (!data) return { id, name: '', email: fallbackEmail, role: 'user', createdAt: new Date().toISOString() };
+  return { id: data.id, name: data.name, email: data.email, role: data.role === 'admin' ? 'admin' : 'user', createdAt: data.created_at };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(readSession);
-  const loading = false;
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [linkError] = useState(hasLinkError);
+
+  useEffect(() => {
+    let active = true;
+    // Also picks up the session from a confirmation / reset link in the URL.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+      // Never await Supabase calls inside this callback (it can deadlock the client).
+      setTimeout(async () => {
+        const next = session?.user ? await fetchProfile(session.user.id, session.user.email ?? '') : null;
+        if (!active) return;
+        setUser(next);
+        setLoading(false);
+      }, 0);
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, []);
 
   const login = async (email: string, password: string) => {
-    const users = getStoredUsers();
-    const found = users.find(u => u.email === email);
-    const ok = !!found && (found.passwordHash && found.salt
-      ? await verifyPassword(password, { passwordHash: found.passwordHash, salt: found.salt })
-      : found.password === password);
-    if (!found || !ok) throw new Error('Неверный email или пароль');
-    if (!found.passwordHash) {
-      // migrate a legacy plain-text account to a hash
-      const { password: _legacy, ...rest } = found;
-      const hashed = { ...rest, ...(await hashPassword(password)) };
-      saveStoredUsers(users.map(u => (u.id === found.id ? hashed : u)));
-    }
-    const session = toPublicUser(found);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setUser(session);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw toFailure(error);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const users = getStoredUsers();
-    if (users.find(u => u.email === email)) throw new Error('Email уже зарегистрирован');
-    const newUser: StoredUser = {
-      id: crypto.randomUUID(),
-      name,
+    const { data, error } = await supabase.auth.signUp({
       email,
-      ...(await hashPassword(password)),
-      role: email === ADMIN_EMAIL ? 'admin' : 'user',
-      createdAt: new Date().toISOString(),
-    };
-    saveStoredUsers([...users, newUser]);
-    const session = toPublicUser(newUser);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setUser(session);
+      password,
+      options: { data: { name: name.trim() }, emailRedirectTo: siteUrl('/app') },
+    });
+    if (error) throw toFailure(error);
+    return !data.session; // no session yet → the confirmation e-mail was sent
   };
 
-  const logout = () => {
-    localStorage.removeItem(SESSION_KEY);
+  const resendConfirmation = async (email: string) => {
+    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: siteUrl('/app') } });
+    if (error) throw toFailure(error);
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: siteUrl('/reset-password') });
+    if (error) throw toFailure(error);
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw toFailure(error);
+    setPasswordRecovery(false);
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, passwordRecovery, linkError, login, register, resendConfirmation, requestPasswordReset, updatePassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

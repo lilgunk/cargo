@@ -6,6 +6,7 @@ import type { Theme } from './contexts/SettingsContext';
 import type { Lang } from './i18n/translations';
 import AuthPage from './pages/AuthPage';
 import AdminPage from './pages/AdminPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import { useCargoStore } from './hooks/useCargoStore';
 import type { CargoStore } from './hooks/useCargoStore';
 import { NavSidebar } from './components/NavSidebar/NavSidebar';
@@ -351,25 +352,28 @@ function DashboardHome({ onNewProject, store }: {
 function CargoApp() {
   const store = useCargoStore();
   const { t } = useSettings();
-  const { user } = useAuth();
-  const userId = user?.id ?? 'anonymous';
   const [activeTab, setActiveTab] = useState('home');
   const [projectName, setProjectName] = useState('');
   const [projectId, setProjectId] = useState<string>(() => crypto.randomUUID());
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>('idle');
 
   // Restore the most recently saved project once, on start.
-  const [restored, setRestored] = useState(false);
-  if (!restored) {
-    setRestored(true);
-    const latest = projectService.latest(userId);
-    if (latest) {
-      store.loadProject(latest);
-      setProjectName(latest.name);
-      setProjectId(latest.id);
-      setLastSaved(new Date(latest.savedAt));
-    }
-  }
+  const { loadProject } = store;
+  useEffect(() => {
+    let active = true;
+    projectService.latest()
+      .then(latest => {
+        if (!active || !latest) return;
+        loadProject(latest);
+        setProjectName(latest.name);
+        setProjectId(latest.id);
+        setLastSaved(new Date(latest.savedAt));
+      })
+      .catch(() => { /* offline or no projects yet: start with an empty project */ });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once, on start
+  }, []);
 
   function handleNewProject(name: string, vehicleId: VehicleId) {
     store.clearAll(vehicleId);
@@ -381,10 +385,16 @@ function CargoApp() {
 
   const name = projectName || t.modal_title;
 
-  function handleSave() {
+  async function handleSave() {
     const now = new Date();
-    projectService.save(userId, buildProject(projectId, name, store.vehicle, store.cargoItems, store.plan, now));
-    setLastSaved(now);
+    setSaveState('saving');
+    try {
+      await projectService.save(buildProject(projectId, name, store.vehicle, store.cargoItems, store.plan, now));
+      setLastSaved(now);
+      setSaveState('idle');
+    } catch {
+      setSaveState('error');
+    }
   }
 
   function handleExportJson() {
@@ -407,7 +417,7 @@ function CargoApp() {
             <SettingsView />
           ) : activeTab === 'optimization' ? (
             <>
-              <Header projectName={name} lastSaved={lastSaved} canExportPlan={!!store.plan}
+              <Header projectName={name} lastSaved={lastSaved} saveState={saveState} canExportPlan={!!store.plan}
                 onSave={handleSave} onExportJson={handleExportJson} onExportCsv={handleExportCsv} />
               <div className="flex-1 flex overflow-hidden min-w-0">
                 <LeftPanel store={store} />
@@ -444,16 +454,19 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (user.role !== 'admin') return <Navigate to="/app" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, passwordRecovery } = useAuth();
   if (loading) return <Spinner />;
+  // Opened a password-reset link: the only thing to do is to set a new password.
+  if (passwordRecovery) return <ResetPasswordPage />;
 
   return (
     <Routes>
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <AuthPage />} />
       <Route path="/dashboard" element={<Navigate to="/app" replace />} />
       <Route path="/app" element={<ProtectedRoute><CargoApp /></ProtectedRoute>} />

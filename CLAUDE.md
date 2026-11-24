@@ -262,3 +262,16 @@ src/
 - `loadingSequence`: шаги стенками от кабины к дверям, опора всегда раньше.
 - Портфель 58 вариантов. Тесты: 46 (в т.ч. случай Box C со скриншота, порядок шагов, property «опора раньше»).
 - `public/_redirects` для Cloudflare Pages (SPA).
+
+---
+
+### Этап 9 — Supabase: аккаунты с подтверждением почты, проекты в базе (2026-11-24)
+
+- Новый проект Supabase (`src/lib/supabase.ts`, publishable key — можно в браузере, все таблицы под RLS). Схема: `supabase/migrations/20261124000000_auth_profiles_projects.sql` (выполнена в SQL Editor).
+- `profiles` (имя, email, роль `user`/`admin`) создаётся триггером при регистрации; роль меняет только админ (триггер `protect_profile`); `admin_delete_user()` — удаление аккаунта (только админ, не себя). `projects` — сохранённые планы, каждый видит только свои.
+- `AuthContext` на Supabase Auth: вход, регистрация с письмом-подтверждением, повторная отправка письма, сброс пароля (`/reset-password`), ошибки — коды `AuthErrorCode` с переводами `auth_err_*`, просроченная ссылка из письма — `auth_link_invalid`.
+- `AuthPage`: экран «Проверьте почту», «Забыли пароль?», мин. 8 символов; убраны неработающие кнопки Google/Microsoft/GitHub и «Запомнить меня».
+- `AdminPage` на Supabase + переводы; `projectService.latest/save` — async, Header показывает «Сохранение…» / ошибку.
+- Удалены `utils/password.ts` и localStorage-аккаунты. Тесты: Supabase подменяется (`vi.mock('../lib/supabase')`).
+- Первый админ: после регистрации в SQL Editor `update public.profiles set role = 'admin' where email = '…';`
+- Встроенная почта Supabase шлёт письма только участникам команды проекта и ~2 в час; для писем любым пользователям нужен свой SMTP (Auth → Emails → SMTP Settings).

@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Check, Download, FileJson, FileSpreadsheet, Save } from 'lucide-react';
+import { AlertCircle, Check, Download, FileJson, FileSpreadsheet, Save } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 
 interface HeaderProps {
   projectName: string;
   lastSaved: Date | null;
+  saveState: 'idle' | 'saving' | 'error';
   canExportPlan: boolean;
   onSave: () => void;
   onExportJson: () => void;
   onExportCsv: () => void;
 }
 
-export function Header({ projectName, lastSaved, canExportPlan, onSave, onExportJson, onExportCsv }: HeaderProps) {
+export function Header({ projectName, lastSaved, saveState, canExportPlan, onSave, onExportJson, onExportCsv }: HeaderProps) {
   const { t, lang } = useSettings();
   const [menu, setMenu] = useState(false);
   const locale = lang === 'pl' ? 'pl-PL' : lang === 'ru' ? 'ru-RU' : 'en-GB';
@@ -21,17 +22,20 @@ export function Header({ projectName, lastSaved, canExportPlan, onSave, onExport
     <header className="h-14 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 flex items-center px-5 gap-4 flex-shrink-0">
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{projectName}</span>
-        <span className="text-[11px] text-gray-400 dark:text-slate-500">
-          {lastSaved
-            ? `${t.header_last_save} ${lastSaved.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
-            : t.header_not_saved}
+        <span className={`text-[11px] ${saveState === 'error' ? 'text-red-500' : 'text-gray-400 dark:text-slate-500'}`} role="status">
+          {saveState === 'saving' ? t.header_saving
+            : saveState === 'error' ? t.header_save_error
+            : lastSaved
+              ? `${t.header_last_save} ${lastSaved.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+              : t.header_not_saved}
         </span>
       </div>
 
       <div className="flex-1" />
 
-      <button onClick={onSave} className={btn}>
-        {lastSaved ? <Check size={13} className="text-green-600" /> : <Save size={13} />}
+      <button onClick={onSave} disabled={saveState === 'saving'} className={`${btn} disabled:opacity-50`}>
+        {saveState === 'error' ? <AlertCircle size={13} className="text-red-500" />
+          : lastSaved ? <Check size={13} className="text-green-600" /> : <Save size={13} />}
         {t.header_save}
       </button>
       <div className="relative">

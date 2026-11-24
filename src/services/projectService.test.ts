@@ -1,22 +1,53 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCargoStore } from '../hooks/useCargoStore';
 import { buildProject, planToCsv, projectService, slugify } from './projectService';
 
-beforeEach(() => localStorage.clear());
+// In-memory stand-in for the Supabase `projects` table. Like Row Level Security,
+// it shows and changes only the rows of the signed-in user (db.uid).
+type Row = { id: string; user_id: string; name: string; data: unknown; saved_at: string };
+const db = vi.hoisted(() => ({ rows: [] as Row[], uid: 'u1' }));
+
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    from: () => ({
+      upsert: async (row: Omit<Row, 'user_id'>) => {
+        const existing = db.rows.find(r => r.id === row.id);
+        if (existing && existing.user_id !== db.uid) return { error: { message: 'row-level security' } };
+        if (existing) Object.assign(existing, row);
+        else db.rows.push({ ...row, user_id: db.uid });
+        return { error: null };
+      },
+      select: () => ({
+        order: () => ({
+          limit: () => ({
+            maybeSingle: async () => {
+              const own = db.rows.filter(r => r.user_id === db.uid).sort((a, b) => b.saved_at.localeCompare(a.saved_at));
+              return { data: own[0] ? { data: own[0].data } : null, error: null };
+            },
+          }),
+        }),
+      }),
+    }),
+  },
+}));
+
+beforeEach(() => { db.rows = []; db.uid = 'u1'; });
 
 describe('projectService', () => {
-  it('saves per user, newest first, and replaces a project with the same id', () => {
+  it('returns the newest own project and replaces a project with the same id', async () => {
     const { result } = renderHook(() => useCargoStore());
     const s = result.current;
-    projectService.save('u1', buildProject('p1', 'Dostawa A', s.vehicle, s.cargoItems, null, new Date('2026-11-01')));
-    projectService.save('u1', buildProject('p2', 'Dostawa B', s.vehicle, s.cargoItems, null, new Date('2026-11-02')));
-    projectService.save('u1', buildProject('p1', 'Dostawa A v2', s.vehicle, s.cargoItems, null, new Date('2026-11-03')));
-    projectService.save('u2', buildProject('p9', 'Cudzy', s.vehicle, s.cargoItems, null));
-    expect(projectService.list('u1').map(p => p.name)).toEqual(['Dostawa A v2', 'Dostawa B']);
-    expect(projectService.list('u2')).toHaveLength(1);
-    expect(projectService.latest('u3')).toBeUndefined();
+    await projectService.save(buildProject('p1', 'Dostawa A', s.vehicle, s.cargoItems, null, new Date('2026-11-01')));
+    await projectService.save(buildProject('p2', 'Dostawa B', s.vehicle, s.cargoItems, null, new Date('2026-11-02')));
+    await projectService.save(buildProject('p1', 'Dostawa A v2', s.vehicle, s.cargoItems, null, new Date('2026-11-03')));
+    expect(db.rows).toHaveLength(2);
+    expect((await projectService.latest())?.name).toBe('Dostawa A v2');
+
+    db.uid = 'u2';
+    expect(await projectService.latest()).toBeUndefined();
+    await expect(projectService.save(buildProject('p1', 'Cudzy', s.vehicle, s.cargoItems, null))).rejects.toBeTruthy();
   });
 
   it('round-trips a computed plan; the restored plan passes the verifier', async () => {
@@ -24,10 +55,11 @@ describe('projectService', () => {
     await act(async () => { await result.current.optimize(); });
     const s = result.current;
     expect(s.plan?.placed.length).toBeGreaterThan(0);
-    projectService.save('u1', buildProject('p1', 'Test', s.vehicle, s.cargoItems, s.plan));
+    await projectService.save(buildProject('p1', 'Test', s.vehicle, s.cargoItems, s.plan));
 
+    const saved = await projectService.latest();
     const fresh = renderHook(() => useCargoStore());
-    act(() => fresh.result.current.loadProject(projectService.latest('u1')!));
+    act(() => fresh.result.current.loadProject(saved!));
     expect(fresh.result.current.placed).toEqual(s.placed);
     expect(fresh.result.current.plan?.violations).toEqual([]);
     expect(fresh.result.current.step).toBe(s.placed.length);

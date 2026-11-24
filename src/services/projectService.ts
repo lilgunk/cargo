@@ -1,10 +1,11 @@
 // Saving and exporting loading plans (Z7).
 //
-// TODAY:  projects are stored per user in localStorage (works offline, GitHub Pages).
-// FUTURE: swap the bodies of list/save for a backend call; the UI does not change.
+// Projects are stored in Supabase (table public.projects). Row Level Security lets each
+// user read and write only their own rows, so no user id is passed from the browser.
 
 import type { CargoItem, PackingResult, Vehicle } from '../types';
 import type { PlanResult } from '../hooks/useCargoStore';
+import { supabase } from '../lib/supabase';
 
 export const PROJECT_FORMAT = 'loadopti-project';
 export const PROJECT_VERSION = 1;
@@ -20,26 +21,28 @@ export interface SavedProject {
   plan: (PackingResult & Pick<PlanResult, 'sortBy' | 'positions' | 'variantsTried'>) | null;
 }
 
-const key = (userId: string) => `lo_projects_${userId}`;
-
 export const projectService = {
-  list(userId: string): SavedProject[] {
-    try {
-      const all = JSON.parse(localStorage.getItem(key(userId)) ?? '[]') as SavedProject[];
-      return all.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
-    } catch {
-      return [];
-    }
+  /** The signed-in user's most recently saved project. */
+  async latest(): Promise<SavedProject | undefined> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('data')
+      .order('saved_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return (data?.data as SavedProject | undefined) ?? undefined;
   },
 
-  latest(userId: string): SavedProject | undefined {
-    return this.list(userId)[0];
-  },
-
-  /** Inserts or replaces the project with the same id. */
-  save(userId: string, project: SavedProject): void {
-    const rest = this.list(userId).filter(p => p.id !== project.id);
-    localStorage.setItem(key(userId), JSON.stringify([project, ...rest]));
+  /** Inserts or replaces the project with the same id (owner is set by the database). */
+  async save(project: SavedProject): Promise<void> {
+    const { error } = await supabase.from('projects').upsert({
+      id: project.id,
+      name: project.name.trim().slice(0, 120) || 'Projekt',
+      data: project,
+      saved_at: project.savedAt,
+    });
+    if (error) throw error;
   },
 };
 
