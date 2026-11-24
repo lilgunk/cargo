@@ -18,5 +18,14 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // `const { password: _, ...rest } = user` is the intended way to drop a field.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true, argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    // Context files export their Provider together with the matching hook / helpers.
+    files: ['src/contexts/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
 ])

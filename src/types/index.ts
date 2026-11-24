@@ -18,6 +18,8 @@ export interface Vehicle {
   maxWeight: number;          // kg
   cargoVolume?: number;       // m³ (informational, from manufacturer)
   wheelArches?: WheelArch[];  // empty array = flat floor, no restrictions
+  // Clear opening of the rear doors (mm). Cargo must pass through it.
+  rearDoor?: { width: number; height: number };
   images?: { front?: string; side?: string };
   // Photo-based cargo view: open-side cutaway image with cargo area calibration
   cargoView?: {
@@ -33,6 +35,10 @@ export interface Vehicle {
   };
 }
 
+// none — keep as entered; horizontal — may turn 90° on the floor (height stays up);
+// any — may be laid on any side
+export type RotationRule = 'none' | 'horizontal' | 'any';
+
 export interface CargoItem {
   id: string;
   name: string;
@@ -42,17 +48,45 @@ export interface CargoItem {
   weight: number; // kg
   quantity: number;
   color: string;
+  rotation: RotationRule;
+  stackable: boolean; // may other cargo be placed on top of it
 }
 
+export type SupportKind = 'floor' | 'between_arches' | 'on_arch' | 'stacked';
+
 export interface PlacedUnit {
+  step: number;      // 1-based loading order
   cargoId: string;
+  name: string;
   color: string;
+  weight: number;    // kg
   x: number; // mm from front wall
   y: number; // mm from left side
   z: number; // mm from floor
-  length: number;
-  width: number;
-  height: number;
+  length: number;    // size along X after rotation
+  width: number;     // size along Y after rotation
+  height: number;    // size along Z after rotation
+  support: SupportKind;
+}
+
+export type UnplacedReason =
+  | 'TOO_LARGE'            // does not fit the cargo space in any allowed orientation
+  | 'DOOR_OPENING'         // fits inside, but not through the rear door
+  | 'PAYLOAD_EXCEEDED'     // would exceed the vehicle payload
+  | 'NO_SPACE'             // no free room left
+  | 'NOT_STACKABLE'        // only free room is on top of non-stackable cargo
+  | 'INSUFFICIENT_SUPPORT' // would hang in the air (too little support)
+  | 'UNSTABLE';            // centre of the base not over the support
+
+export interface UnplacedUnit {
+  cargoId: string;
+  name: string;
+  reason: UnplacedReason;
+}
+
+export interface PackingResult {
+  placed: PlacedUnit[];
+  unplaced: UnplacedUnit[];
 }
 
 export interface PlacementStep {

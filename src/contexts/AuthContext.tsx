@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export interface User {
@@ -34,17 +34,15 @@ export function saveStoredUsers(users: StoredUser[]) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+function readSession(): User | null {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as User; } catch { localStorage.removeItem(SESSION_KEY); return null; }
+}
 
-  useEffect(() => {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (raw) {
-      try { setUser(JSON.parse(raw)); } catch { localStorage.removeItem(SESSION_KEY); }
-    }
-    setLoading(false);
-  }, []);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(readSession);
+  const loading = false;
 
   const login = async (email: string, password: string) => {
     const found = getStoredUsers().find(u => u.email === email);

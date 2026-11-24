@@ -203,3 +203,16 @@ src/
 - Кнопки «Очистить загрузку» и «Сгенерировать отчёт» (UI есть, логика — нет)
 - Вкладка «Палета» в форме (UI есть, логика — нет)
 - Фото для Furgon S и Sprinter L2H2 (только SVG)
+
+---
+
+### Этап 4 — Алгоритм с ограничениями + верификатор (2026-11-24)
+
+- `src/algorithm/packCargo.ts` — Extreme Points (Crainic, Perboli, Tadei 2008) с ограничениями: границы кузова, коллизии, колёсные арки (на них можно ставить), задние двери (`Vehicle.rearDoor`), опора ≥ 75% основания, устойчивость (центр над опорой), запрет штабелирования, грузоподъёмность, порядок загрузки.
+- `packCargoBest` — лучший из 20 детерминированных вариантов (5 сортировок × 4 правила выбора позиции, в т.ч. «максимальный контакт»). Результат — эвристика, НЕ «оптимально».
+- Причины «не влезло»: TOO_LARGE, DOOR_OPENING, PAYLOAD_EXCEEDED, NO_SPACE, NOT_STACKABLE, INSUFFICIENT_SUPPORT, UNSTABLE.
+- `src/algorithm/verifyPacking.ts` — независимый верификатор плана (в UI: «0 naruszeń»).
+- Груз: `name`, `rotation` (`none` | `horizontal` | `any`), `stackable`. Форма в LeftPanel, теги в списке.
+- RightPanel: статус проверки вместо «Оптимально», блок «Nie zmieszczono» с причиной и подсказкой, рабочая «Wyczyść załadunek».
+- Тесты: `npm test` (vitest + fast-check + testing-library) — сценарии, причины, верификатор, property-тесты, компонентный тест панелей. `npm run typecheck`.
+- Удалён `utils/wheelArchCheck.ts` (заменён алгоритмом).

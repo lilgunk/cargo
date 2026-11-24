@@ -3,6 +3,8 @@ import { ChevronDown, Trash2 } from 'lucide-react';
 import { vehicleService } from '../../services/vehicleService';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
+import { allowedDims } from '../../algorithm/packCargo';
+import type { RotationRule } from '../../types';
 
 type Tab = 'box' | 'pallet';
 
@@ -44,7 +46,9 @@ export function LeftPanel({ store }: { store: CargoStore }) {
   const { t } = useSettings();
   const [ddOpen, setDdOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('box');
-  const [form, setForm] = useState({ length: '600', width: '400', height: '300', weight: '15', qty: '1' });
+  const [form, setForm] = useState({ name: '', length: '600', width: '400', height: '300', weight: '15', qty: '1' });
+  const [rotation, setRotation] = useState<RotationRule>('horizontal');
+  const [stackable, setStackable] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
 
   const totalWeight = cargoItems.reduce((s, c) => s + c.weight * c.quantity, 0);
@@ -53,23 +57,24 @@ export function LeftPanel({ store }: { store: CargoStore }) {
   function handleAdd() {
     setFormError(null);
     const l = parseInt(form.length, 10), w = parseInt(form.width, 10);
-    const h = parseInt(form.height, 10), wt = parseInt(form.weight, 10);
+    const h = parseInt(form.height, 10), wt = parseFloat(form.weight.replace(',', '.'));
     const qty = parseInt(form.qty, 10);
-    if (!(l > 0 && w > 0 && h > 0 && wt > 0 && qty > 0)) return;
+    if (!(l > 0 && w > 0 && h > 0 && wt > 0 && qty > 0)) { setFormError(t.left_err_numbers); return; }
 
-    if (l > vehicle.length || w > vehicle.width || h > vehicle.height) {
-      const over: string[] = [];
-      if (l > vehicle.length) over.push(`${t.left_err_dim_length} ${l} > ${vehicle.length} ${t.left_mm}`);
-      if (w > vehicle.width)  over.push(`${t.left_err_dim_width} ${w} > ${vehicle.width} ${t.left_mm}`);
-      if (h > vehicle.height) over.push(`${t.left_err_dim_height} ${h} > ${vehicle.height} ${t.left_mm}`);
-      setFormError(`${t.left_err_oversize}: ${over.join(', ')}`);
+    // Z4: the item must fit the cargo space in at least one allowed orientation.
+    const fits = allowedDims({ length: l, width: w, height: h, rotation })
+      .some(d => d.l <= vehicle.length && d.w <= vehicle.width && d.h <= vehicle.height);
+    if (!fits) {
+      setFormError(`${t.left_err_never_fits} (${vehicle.length} × ${vehicle.width} × ${vehicle.height} ${t.left_mm})`);
       return;
     }
-    if (!addCargo({ length: l, width: w, height: h, weight: wt, quantity: qty })) {
-      setFormError(t.left_err_volume); return;
-    }
-    setForm(f => ({ ...f, qty: '1' }));
+    addCargo({ name: form.name, length: l, width: w, height: h, weight: wt, quantity: qty, rotation, stackable });
+    setForm(f => ({ ...f, name: '', qty: '1' }));
   }
+
+  const rotationShort: Record<RotationRule, string> = {
+    none: t.left_rot_none_short, horizontal: t.left_rot_horizontal_short, any: t.left_rot_any_short,
+  };
 
   const inputCls = 'w-full px-2 py-1.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded text-xs text-gray-800 dark:text-gray-100 focus:outline-none focus:border-blue-500 tabular-nums';
 
@@ -135,6 +140,12 @@ export function LeftPanel({ store }: { store: CargoStore }) {
             </button>
           ))}
         </div>
+        <div className="mb-2">
+          <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_name}</label>
+          <input type="text" value={form.name} placeholder={t.left_name_ph} maxLength={60}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            className={inputCls} />
+        </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
           {[
             { label: t.left_length_mm, key: 'length' },
@@ -150,12 +161,24 @@ export function LeftPanel({ store }: { store: CargoStore }) {
             </div>
           ))}
         </div>
-        <div className="mb-3">
+        <div className="mb-2">
           <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_qty}</label>
           <input type="number" value={form.qty}
             onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
             className={inputCls} />
         </div>
+        <div className="mb-2">
+          <label className="block text-[10px] text-gray-500 dark:text-slate-400 mb-1">{t.left_rotation}</label>
+          <select value={rotation} onChange={e => setRotation(e.target.value as RotationRule)} className={inputCls}>
+            <option value="none">{t.left_rot_none}</option>
+            <option value="horizontal">{t.left_rot_horizontal}</option>
+            <option value="any">{t.left_rot_any}</option>
+          </select>
+        </div>
+        <label className="flex items-start gap-2 mb-3 text-[11px] text-gray-600 dark:text-slate-300 cursor-pointer">
+          <input type="checkbox" checked={stackable} onChange={e => setStackable(e.target.checked)} className="mt-0.5 accent-blue-600" />
+          {t.left_stackable}
+        </label>
         <button onClick={handleAdd}
           className="w-full py-2 rounded-lg bg-gray-900 dark:bg-blue-600 text-white text-xs font-medium hover:bg-gray-800 dark:hover:bg-blue-700 transition-colors">
           {t.left_add}
@@ -175,11 +198,20 @@ export function LeftPanel({ store }: { store: CargoStore }) {
                 <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: item.color }} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs text-gray-800 dark:text-gray-200 font-medium leading-tight">
+                <div className="text-xs text-gray-800 dark:text-gray-200 font-medium leading-tight truncate" title={item.name}>
+                  {item.name}
+                </div>
+                <div className="text-[10px] text-gray-600 dark:text-slate-300 tabular-nums mt-0.5">
                   {item.length} × {item.width} × {item.height} {t.left_mm}
                 </div>
                 <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">
                   {item.weight} {t.left_mm === 'мм' ? 'кг' : 'kg'} · {item.quantity} {t.left_mm === 'мм' ? 'шт.' : t.left_mm === 'mm' ? 'szt.' : 'pcs.'}
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <span className="px-1.5 py-px rounded text-[9px] bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{rotationShort[item.rotation]}</span>
+                  {!item.stackable && (
+                    <span className="px-1.5 py-px rounded text-[9px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t.left_not_stackable_tag}</span>
+                  )}
                 </div>
               </div>
               <button onClick={() => removeCargo(item.id)}

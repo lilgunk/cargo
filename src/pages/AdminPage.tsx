@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, getStoredUsers, saveStoredUsers } from '../contexts/AuthContext';
 import type { User } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import {
   Users, Trash2, Shield, ShieldOff, ArrowLeft,
   UserCheck, UserPlus, Calendar, Crown,
@@ -16,31 +15,29 @@ export default function AdminPage() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => { fetchUsers(); }, []);
 
-  async function fetchUsers() {
+  function fetchUsers() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, name, email, role, created_at')
-      .order('created_at', { ascending: false });
-    if (error) { setError('Ошибка загрузки'); }
-    else setUsers((data ?? []).map(d => ({ id: d.id, name: d.name, email: d.email, role: d.role, createdAt: d.created_at })));
+    const all = getStoredUsers();
+    const sorted = [...all].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setUsers(sorted.map(({ password: _, ...u }) => u as User));
     setLoading(false);
   }
 
-  async function deleteUser(id: string) {
+  function deleteUser(id: string) {
     if (!confirm('Удалить пользователя?')) return;
-    await supabase.from('profiles').delete().eq('id', id);
+    const updated = getStoredUsers().filter(u => u.id !== id);
+    saveStoredUsers(updated);
     setUsers(prev => prev.filter(u => u.id !== id));
   }
 
-  async function toggleRole(u: User) {
+  function toggleRole(u: User) {
     if (u.email === ADMIN_EMAIL) return;
     const newRole = u.role === 'admin' ? 'user' : 'admin';
-    await supabase.from('profiles').update({ role: newRole }).eq('id', u.id);
+    const updated = getStoredUsers().map(x => x.id === u.id ? { ...x, role: newRole as 'admin' | 'user' } : x);
+    saveStoredUsers(updated);
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: newRole } : x));
   }
 
@@ -74,7 +71,6 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        {error && <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<Users size={20} className="text-indigo-400" />} label="Всего пользователей" value={total} color="indigo" />

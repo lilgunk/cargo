@@ -56,6 +56,7 @@ export const VEHICLES: Vehicle[] = [
     height: 1900,
     maxWeight: 1100,
     cargoVolume: 10.5,
+    rearDoor: { width: 1540, height: 1820 }, // APPROXIMATE — verify on vehicle
     wheelArches: [
       {
         heightFromFloor:  270,  // APPROXIMATE
@@ -97,6 +98,7 @@ export const VEHICLES: Vehicle[] = [
     height: 1900,
     maxWeight: 1100,
     cargoVolume: 14.1,
+    rearDoor: { width: 1540, height: 1820 }, // APPROXIMATE — from the notes above
     wheelArches: [
       {
         heightFromFloor:  270,  // APPROXIMATE — verify on physical vehicle
@@ -137,6 +139,8 @@ export const SAMPLE_CARGO: CargoItem[] = [
     weight: 15,
     quantity: 8,
     color: '#818cf8',
+    rotation: 'any',
+    stackable: true,
   },
   {
     id: 'box-2',
@@ -147,6 +151,8 @@ export const SAMPLE_CARGO: CargoItem[] = [
     weight: 25,
     quantity: 4,
     color: '#34d399',
+    rotation: 'horizontal',
+    stackable: true,
   },
   {
     id: 'box-3',
@@ -157,6 +163,8 @@ export const SAMPLE_CARGO: CargoItem[] = [
     weight: 30,
     quantity: 2,
     color: '#fbbf24',
+    rotation: 'horizontal',
+    stackable: false,
   },
 ];
 
