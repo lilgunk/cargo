@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { MoreVertical, Trash2, FileText, Zap, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { MoreVertical, Trash2, FileText, Zap, ShieldCheck, ShieldAlert } from 'lucide-react';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
-import type { UnplacedReason } from '../../types';
 import { MAX_UNITS } from '../../algorithm/packCargo';
 import { WeightBalance } from '../WeightBalance/WeightBalance';
+import { UnplacedList } from '../UnplacedList/UnplacedList';
 import { openReport } from '../../services/reportService';
 
 export function RightPanel({ store, projectName }: { store: CargoStore; projectName?: string }) {
@@ -26,12 +26,6 @@ export function RightPanel({ store, projectName }: { store: CargoStore; projectN
       ? { label: t.right_verified, icon: ShieldCheck, cls: 'bg-green-50 dark:bg-green-900/20 text-green-600 border-green-200 dark:border-green-700' }
       : { label: `${t.right_violations}: ${plan.violations.length}`, icon: ShieldAlert, cls: 'bg-red-50 dark:bg-red-900/20 text-red-600 border-red-200 dark:border-red-700' };
 
-  const unplacedGroups = Object.values(unplaced.reduce<Record<string, { name: string; reason: UnplacedReason; count: number; color: string }>>((acc, u) => {
-    const key = u.cargoId + u.reason;
-    const color = cargoItems.find(c => c.id === u.cargoId)?.color ?? '#94a3b8';
-    acc[key] = acc[key] ? { ...acc[key], count: acc[key].count + 1 } : { name: u.name, reason: u.reason, count: 1, color };
-    return acc;
-  }, {}));
 
   const placedDisplay = cargoItems
     .map(item => {
@@ -93,30 +87,13 @@ export function RightPanel({ store, projectName }: { store: CargoStore; projectN
 
       {/* Did not fit */}
       {plan && (
-        <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0 max-h-56 overflow-y-auto">
-          {unplacedGroups.length === 0 ? (
+        <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0 max-h-72 overflow-y-auto">
+          {unplaced.length === 0 ? (
             <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
               <ShieldCheck size={14} /> {t.right_all_placed}
             </div>
           ) : (
-            <>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400 mb-2">
-                <AlertTriangle size={13} /> {t.right_unplaced} ({unplaced.length})
-              </div>
-              <div className="space-y-1.5">
-                {unplacedGroups.map(g => (
-                  <div key={g.name + g.reason} className="p-2 rounded-lg bg-red-50/70 dark:bg-red-900/10 border border-red-100 dark:border-red-900/40">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-gray-900 dark:text-gray-100">
-                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: g.color }} />
-                      <span className="truncate">{g.name}</span>
-                      <span className="text-gray-400 font-normal">× {g.count}</span>
-                    </div>
-                    <div className="text-[11px] text-red-700 dark:text-red-300 mt-0.5">{t[`reason_${g.reason}`]}</div>
-                    <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{t[`hint_${g.reason}`]}</div>
-                  </div>
-                ))}
-              </div>
-            </>
+            <UnplacedList unplaced={unplaced} cargoItems={cargoItems} />
           )}
         </div>
       )}
