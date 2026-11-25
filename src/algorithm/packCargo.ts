@@ -443,17 +443,22 @@ export function planQuality(r: PackingResult, vehicleHeight = 0): PlanQuality {
   return { volume, units: r.placed.length, weight, blockedFloor, deadSpace, loadingLength, comZ: weight > 0 ? mz / weight : 0 };
 }
 
+/** A centre of gravity lower by more than this share of the cargo-space height wins over a shorter load. */
+export const LOW_CENTRE_MARGIN = 0.15;
+
 /**
  * a better than b: more volume loaded, more units, more mass; on a tie: less
- * floor taken by "do not stack" cargo, less wasted space above it, a shorter
- * loading length (free floor at the doors), then a lower centre of mass.
+ * floor taken by "do not stack" cargo, less wasted space above it, a clearly
+ * lower centre of gravity (a tall free-standing wall can tip over in transit),
+ * a shorter loading length (free floor at the doors), then a lower centre of mass.
  */
-function better(a: PlanQuality, b: PlanQuality): boolean {
+function better(a: PlanQuality, b: PlanQuality, vehicleHeight = 0): boolean {
   if (a.volume !== b.volume) return a.volume > b.volume;
   if (a.units !== b.units) return a.units > b.units;
   if (a.weight !== b.weight) return a.weight > b.weight;
   if (a.blockedFloor !== b.blockedFloor) return a.blockedFloor < b.blockedFloor;
   if (a.deadSpace !== b.deadSpace) return a.deadSpace < b.deadSpace;
+  if (vehicleHeight > 0 && Math.abs(a.comZ - b.comZ) > LOW_CENTRE_MARGIN * vehicleHeight) return a.comZ < b.comZ;
   if (a.loadingLength !== b.loadingLength) return a.loadingLength < b.loadingLength;
   return a.comZ < b.comZ - 1e-9;
 }
@@ -512,7 +517,7 @@ export function packCargoBest(items: CargoItem[], vehicle: Vehicle, supportRatio
     if (r.aborted) break;
     tried++;
     const q = planQuality(r, vehicle.height);
-    if (!best || better(q, bestQ!)) {
+    if (!best || better(q, bestQ!, vehicle.height)) {
       best = { ...r, ...v, variantsTried: 0 };
       bestQ = q;
     }

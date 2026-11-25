@@ -340,3 +340,14 @@ describe('delivery stops', () => {
     expect(codes([unit('last', 1, {}), unit('first', 2, { x: 1000 })])).toEqual([]);
   });
 });
+
+describe('load stability', () => {
+  it('prefers low layers over a tall free-standing wall at the cab', () => {
+    const v = van({ length: 4300, width: 1760, height: 1900 });
+    const items = [item({ id: 'k', length: 600, width: 400, height: 300, weight: 15, quantity: 30 })];
+    const best = packCargoBest(items, v);
+    expect(best.placed).toHaveLength(30);
+    expect(Math.max(...best.placed.map(u => u.z + u.height))).toBeLessThanOrEqual(900);
+    expect(planQuality(best, v.height).comZ).toBeLessThan(0.25 * v.height);
+  });
+});
