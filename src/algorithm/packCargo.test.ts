@@ -306,3 +306,37 @@ describe('author feedback (2026-11-24)', () => {
     }), { numRuns: 60 });
   }, 300_000);
 });
+
+describe('delivery stops', () => {
+  const box = (id: string, stop: number) => item({ id, length: 1000, width: 1000, height: 500, rotation: 'none', stop });
+
+  it('puts cargo for a later stop deeper (at the cab) and loads it first', () => {
+    const v = van({ length: 2000, width: 1000, height: 500 });
+    const items = [box('first', 1), box('last', 2)];
+    for (const r of [packCargo(items, v), packCargoBest(items, v)]) {
+      expect(verifyPacking(items, v, r.placed, 0.75)).toEqual([]);
+      const at = Object.fromEntries(r.placed.map(p => [p.cargoId, p]));
+      expect(at.last).toMatchObject({ x: 0, step: 1 });
+      expect(at.first).toMatchObject({ x: 1000, step: 2 });
+    }
+  });
+
+  it('never puts cargo for a later stop in front of or on top of earlier deliveries', () => {
+    fc.assert(fc.property(vanArb, itemsArb, (v, list) => {
+      const items = list.map((it, i) => ({ ...it, stop: 1 + (i % 3) }));
+      expect(verifyPacking(items, v, packCargoBest(items, v).placed, 0.75)).toEqual([]);
+    }), { numRuns: 25 });
+  });
+
+  it('the verifier flags a buried delivery', () => {
+    const v = van({ length: 2000, width: 1000, height: 1000 });
+    const items = [box('first', 1), box('last', 2)];
+    const unit = (cargoId: string, step: number, o: object) => ({
+      step, cargoId, name: cargoId, color: '#888', weight: 10, x: 0, y: 0, z: 0, length: 1000, width: 1000, height: 500, support: 'floor' as const, ...o,
+    });
+    const codes = (ps: ReturnType<typeof unit>[]) => verifyPacking(items, v, ps, 0.75).map(x => x.code);
+    expect(codes([unit('first', 1, {}), unit('last', 2, { x: 1000 })])).toContain('DELIVERY_ORDER');  // in front of it
+    expect(codes([unit('first', 1, {}), unit('last', 2, { z: 500, support: 'stacked' })])).toContain('DELIVERY_ORDER'); // on top
+    expect(codes([unit('last', 1, {}), unit('first', 2, { x: 1000 })])).toEqual([]);
+  });
+});

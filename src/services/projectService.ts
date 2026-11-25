@@ -134,6 +134,7 @@ export function parseProject(text: string): SavedProject {
       color: typeof c.color === 'string' && /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : '#818cf8',
       stackable: c.stackable !== false,
       floorOnly: c.floorOnly === true,
+      stop: Number.isInteger(c.stop) && (c.stop as number) > 1 ? c.stop : undefined,
     } as CargoItem;
   });
 

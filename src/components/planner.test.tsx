@@ -94,7 +94,7 @@ describe('planner panels', () => {
     setup();
     const inputs = screen.getAllByRole('spinbutton');
     fireEvent.change(inputs[0], { target: { value: '60' } });
-    fireEvent.change(inputs.at(-1)!, { target: { value: '11000' } });
+    fireEvent.change(screen.getByLabelText('Ilość'), { target: { value: '11000' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj ładunek' }).at(-1)!);
     expect(screen.getByText(/Za dużo sztuk: plan obejmuje maksymalnie 1000 sztuk/)).toBeTruthy();
   });

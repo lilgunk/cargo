@@ -59,6 +59,16 @@ const POSITION_ORDER: Record<PositionRule, (a: Point, b: Point) => number> = {
 
 // ── geometry ─────────────────────────────────────────────────────────────────
 
+/**
+ * `a` is in the way of unloading `b` through the rear doors: it stands between `b`
+ * and the doors (overlapping in the y-z plane) or on top of `b`.
+ */
+export function blocks(a: Box, b: Box): boolean {
+  const yz = overlap1D(a.y, a.y + a.w, b.y, b.y + b.w) > 0 && overlap1D(a.z, a.z + a.h, b.z, b.z + b.h) > 0;
+  const xy = overlap1D(a.x, a.x + a.l, b.x, b.x + b.l) > 0 && overlap1D(a.y, a.y + a.w, b.y, b.y + b.w) > 0;
+  return (yz && a.x >= b.x + b.l) || (xy && a.z >= b.z + b.h);
+}
+
 /** Interiors overlap (touching faces is allowed). */
 export function intersects(a: Box, b: Box): boolean {
   return a.x < b.x + b.l && b.x < a.x + a.l
@@ -195,6 +205,11 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     for (const s of placed) {
       if (s.z === box.z + box.h && footprintOverlap(box, s) > 0) return { ok: false, hadRoom: false, reason: 'NO_SPACE' };
     }
+    // delivery stops: cargo for a later stop may stand neither between this box and the doors nor on it
+    for (const s of placed) {
+      if (stopOf(s.item) <= currentStop) continue;
+      if (blocks(s, box)) return { ok: false, hadRoom: true, reason: 'DELIVERY_ORDER' };
+    }
     if (box.z === 0) {
       const inArchZone = arches.some(a => overlap1D(box.x, box.x + box.l, a.x, a.x + a.l) > 0);
       return { ok: true, support: inArchZone ? 'between_arches' : 'floor' };
@@ -256,7 +271,10 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     return first ? [first, ...dims.filter(d => d !== first).sort((a, b) => a.h - b.h)] : [...dims].sort((a, b) => a.h - b.h);
   }
 
+  let currentStop = 1; // stop of the unit being placed (read by check)
+
   function place(item: CargoItem): UnplacedReason | null {
+    currentStop = stopOf(item);
     const fitting = allowedDims(item).filter(d => d.l <= vehicle.length && d.w <= vehicle.width && d.h <= vehicle.height);
     if (fitting.length === 0) return 'TOO_LARGE';
     const door = vehicle.rearDoor;
@@ -322,6 +340,7 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
   const group = (i: CargoItem) => (i.floorOnly ? 0 : options.nonStackableLast && !i.stackable ? 2 : 1);
   const units = items.flatMap((item, index) => Array.from({ length: item.quantity }, () => ({ item, index })));
   units.sort((a, b) =>
+    stopOf(b.item) - stopOf(a.item) ||   // later stops first: deeper in the van
     group(a.item) - group(b.item) ||
     sortValue(b.item) - sortValue(a.item) ||
     SORT_VALUE.volume(b.item) - SORT_VALUE.volume(a.item) ||
@@ -341,7 +360,7 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
     }
   }
 
-  const result: PlacedUnit[] = loadingSequence(placed).map((b, i) => ({
+  const result: PlacedUnit[] = loadingSequence(placed, b => stopOf(b.item)).map((b, i) => ({
     step: i + 1,
     cargoId: b.item.id,
     name: b.item.name,
@@ -368,7 +387,10 @@ export function packCargo(items: CargoItem[], vehicle: Vehicle, options: PackOpt
  * supports are already loaded — so a column at the cab is finished bottom-to-top
  * before the loader moves back, and nothing is ever loaded before its support.
  */
-export function loadingSequence<T extends Box>(boxes: T[]): T[] {
+/** Delivery stop of a cargo item (1 = unloaded first). */
+export const stopOf = (item: { stop?: number }) => item.stop ?? 1;
+
+export function loadingSequence<T extends Box>(boxes: T[], stop: (b: T) => number = () => 1): T[] {
   const supports = boxes.map(b => boxes
     .map((s, j) => ({ s, j }))
     .filter(({ s }) => s !== b && s.z + s.h === b.z && footprintOverlap(b, s) > 0)
@@ -380,7 +402,9 @@ export function loadingSequence<T extends Box>(boxes: T[]): T[] {
     let pick = -1;
     for (let i = 0; i < boxes.length; i++) {
       if (done[i] || !supports[i].every(j => done[j])) continue;
-      if (pick < 0 || closerToCab(boxes[i], boxes[pick])) pick = i;
+      // cargo for later stops goes in first (it is unloaded last), then wall by wall from the cab
+      if (pick < 0 || stop(boxes[i]) > stop(boxes[pick])
+        || (stop(boxes[i]) === stop(boxes[pick]) && closerToCab(boxes[i], boxes[pick]))) pick = i;
     }
     done[pick] = true;
     out.push(boxes[pick]);

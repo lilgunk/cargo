@@ -19,6 +19,7 @@ export interface NewCargo {
   stackable: boolean;
   floorOnly?: boolean;
   kind?: CargoKind;
+  stop?: number;
 }
 
 export type { PlanResult };

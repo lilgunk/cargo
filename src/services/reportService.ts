@@ -39,12 +39,14 @@ export interface ReportInput {
   vehicle: Vehicle;
   plan: PlanResult;
   totalUnits: number;
+  /** delivery stop of each cargo id — the steps table gets a stop column when there are several */
+  stops?: Record<string, number>;
   t: Translations;
   locale: string;
   date?: Date;
 }
 
-export function buildReportHtml({ projectName, vehicle, plan, totalUnits, t, locale, date = new Date() }: ReportInput): string {
+export function buildReportHtml({ projectName, vehicle, plan, totalUnits, stops, t, locale, date = new Date() }: ReportInput): string {
   const placed = [...plan.placed].sort((a, b) => a.step - b.step);
   const wd = weightDistribution(placed, vehicle);
   const usedVolume = placed.reduce((s, u) => s + u.length * u.width * u.height, 0) / 1e9;
@@ -63,7 +65,8 @@ export function buildReportHtml({ projectName, vehicle, plan, totalUnits, t, loc
     else unplaced.set(key, { name: u.name, reason: t[`reason_${u.reason}`] ?? u.reason, count: 1 });
   }
 
-  const rows = placed.map(u => `<tr><td>${u.step}</td><td>${escapeHtml(u.name)}</td>
+  const multiStop = !!stops && Object.values(stops).some(s => s > 1);
+  const rows = placed.map(u => `<tr><td>${u.step}</td>${multiStop ? `<td>${stops![u.cargoId] ?? 1}</td>` : ''}<td>${escapeHtml(u.name)}</td>
 <td>${u.length} × ${u.width} × ${u.height}</td><td>${fmt(u.x)} / ${fmt(u.y)} / ${fmt(u.z)}</td>
 <td>${escapeHtml(supportLabel[u.support] ?? u.support)}</td><td>${fmt(u.weight, u.weight % 1 ? 1 : 0)}</td></tr>`).join('');
 
@@ -112,7 +115,7 @@ ${viewSvg(vehicle, placed, 'top', t.view_top)}
 ${viewSvg(vehicle, placed, 'side', t.view_side)}
 
 <h2>${escapeHtml(t.report_steps)}</h2>
-<table><thead><tr><th>#</th><th>${escapeHtml(t.report_col_cargo)}</th><th>${escapeHtml(t.report_col_size)}</th><th>${escapeHtml(t.report_col_pos)}</th><th>${escapeHtml(t.report_col_support)}</th><th>${escapeHtml(t.unit_kg)}</th></tr></thead>
+<table><thead><tr><th>#</th>${multiStop ? `<th>${escapeHtml(t.report_col_stop)}</th>` : ''}<th>${escapeHtml(t.report_col_cargo)}</th><th>${escapeHtml(t.report_col_size)}</th><th>${escapeHtml(t.report_col_pos)}</th><th>${escapeHtml(t.report_col_support)}</th><th>${escapeHtml(t.unit_kg)}</th></tr></thead>
 <tbody>${rows}</tbody></table>
 
 <h2>${escapeHtml(t.right_unplaced)}</h2>

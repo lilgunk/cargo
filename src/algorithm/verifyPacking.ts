@@ -19,6 +19,7 @@ export type ViolationCode =
   | 'NO_SUPPORT'
   | 'UNSTABLE'
   | 'LOADING_ORDER'
+  | 'DELIVERY_ORDER'
   | 'PAYLOAD_EXCEEDED';
 
 export interface Violation { code: ViolationCode; step?: number }
@@ -100,6 +101,17 @@ export function verifyPacking(items: CargoItem[], vehicle: Vehicle, placed: Plac
       else if (!inHull(r.x0 + r.x1, r.y0 + r.y1, pts)) out.push({ code: 'UNSTABLE', step: u.step });
     }
   });
+  // delivery stops: nothing for a later stop between a unit and the doors or on top of it
+  const stops = placed.map(u => byId.get(u.cargoId)?.stop ?? 1);
+  if (stops.some(s => s !== 1)) {
+    const over = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) > Math.max(a0, b0);
+    const inTheWay = (v: R, u: R) =>
+      (over(v.y0, v.y1, u.y0, u.y1) && over(v.z0, v.z1, u.z0, u.z1) && v.x0 >= u.x1)   // between u and the doors
+      || (over(v.x0, v.x1, u.x0, u.x1) && over(v.y0, v.y1, u.y0, u.y1) && v.z0 >= u.z1); // on top of u
+    placed.forEach((u, i) => {
+      if (rs.some((v, j) => stops[j] > stops[i] && inTheWay(v, rs[i]))) out.push({ code: 'DELIVERY_ORDER', step: u.step });
+    });
+  }
   if (mass > vehicle.maxWeight) out.push({ code: 'PAYLOAD_EXCEEDED' });
   return out;
 }

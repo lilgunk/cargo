@@ -168,6 +168,7 @@ export function RightPanel({ store, projectName }: { store: CargoStore; projectN
         <button disabled={!plan} title={plan ? undefined : t.report_need_plan}
           onClick={() => plan && openReport({
             projectName: projectName || t.report_title, vehicle, plan, totalUnits: totalItems, t,
+            stops: Object.fromEntries(cargoItems.map(c => [c.id, c.stop ?? 1])),
             locale: lang === 'pl' ? 'pl-PL' : lang === 'ru' ? 'ru-RU' : 'en-GB',
           })}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-gray-300 dark:border-slate-600 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors">

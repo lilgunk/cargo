@@ -55,7 +55,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
   const { t } = useSettings();
   const [ddOpen, setDdOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('box');
-  const [form, setForm] = useState({ name: '', length: '600', width: '400', height: '300', weight: '15', qty: '1' });
+  const [form, setForm] = useState({ name: '', length: '600', width: '400', height: '300', weight: '15', qty: '1', stop: '1' });
   const [rotation, setRotation] = useState<RotationRule>('horizontal');
   const [stackable, setStackable] = useState(true);
   const [floorOnly, setFloorOnly] = useState(false);
@@ -65,6 +65,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
 
   const totalWeight = cargoItems.reduce((s, c) => s + c.weight * c.quantity, 0);
   const totalItems  = cargoItems.reduce((s, c) => s + c.quantity, 0);
+  const multiStop = cargoItems.some(c => (c.stop ?? 1) > 1);
 
   function handleAdd() {
     setFormError(null);
@@ -74,7 +75,8 @@ export function LeftPanel({ store }: { store: CargoStore }) {
     const w = pallet ? PALLETS[palletType].width : parseInt(form.width, 10);
     const h = parseInt(form.height, 10), wt = parseFloat(form.weight.replace(',', '.'));
     const qty = parseInt(form.qty, 10);
-    if (!(l > 0 && w > 0 && h > 0 && wt > 0 && qty > 0)) { setFormError(t.left_err_numbers); return; }
+    const stop = parseInt(form.stop, 10);
+    if (!(l > 0 && w > 0 && h > 0 && wt > 0 && qty > 0 && stop > 0)) { setFormError(t.left_err_numbers); return; }
     if (pallet && h <= PALLET_BASE_HEIGHT) { setFormError(t.left_err_pallet_height); return; }
     if (totalItems + qty > MAX_UNITS) { setFormError(t.left_err_too_many.replace('{n}', String(MAX_UNITS))); return; }
     const rot: RotationRule = pallet ? 'horizontal' : rotation;
@@ -92,6 +94,7 @@ export function LeftPanel({ store }: { store: CargoStore }) {
       stackable: pallet ? palletStackable : stackable,
       floorOnly: pallet ? true : floorOnly,
       kind: pallet ? 'pallet' : 'box',
+      stop: stop > 1 ? stop : undefined,
     });
     setForm(f => ({ ...f, name: '', qty: '1' }));
   }
@@ -197,11 +200,19 @@ export function LeftPanel({ store }: { store: CargoStore }) {
             </div>
           ))}
         </div>
-        <div className="mb-2">
-          <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{t.left_qty}</label>
-          <input type="number" value={form.qty}
-            onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
-            className={inputCls} />
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1">{t.left_qty}</label>
+            <input type="number" value={form.qty} aria-label={t.left_qty}
+              onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
+              className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-1 truncate" title={t.left_stop}>{t.left_stop}</label>
+            <input type="number" min={1} value={form.stop} aria-label={t.left_stop}
+              onChange={e => setForm(f => ({ ...f, stop: e.target.value }))}
+              className={inputCls} />
+          </div>
         </div>
         {tab === 'box' ? (
           <>
@@ -266,6 +277,9 @@ export function LeftPanel({ store }: { store: CargoStore }) {
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1">
                   <span className="px-1.5 py-px rounded text-[9px] bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{rotationShort[item.rotation]}</span>
+                  {multiStop && (
+                    <span className="px-1.5 py-px rounded text-[9px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">{t.left_stop_tag.replace('{n}', String(item.stop ?? 1))}</span>
+                  )}
                   {item.floorOnly && (
                     <span className="px-1.5 py-px rounded text-[9px] bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300">{t.left_floor_only_tag}</span>
                   )}
