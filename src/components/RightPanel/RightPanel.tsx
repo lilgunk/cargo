@@ -4,9 +4,11 @@ import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
 import type { UnplacedReason } from '../../types';
 import { MAX_UNITS } from '../../algorithm/packCargo';
+import { WeightBalance } from '../WeightBalance/WeightBalance';
+import { openReport } from '../../services/reportService';
 
-export function RightPanel({ store }: { store: CargoStore }) {
-  const { t } = useSettings();
+export function RightPanel({ store, projectName }: { store: CargoStore; projectName?: string }) {
+  const { t, lang } = useSettings();
   const [optimizing, setOptimizing] = useState(false);
   const { occupancy, usedVolume, maxVolume, placedWeight, totalItems, freeVolume, vehicle, cargoItems, placed, unplaced, plan } = store;
 
@@ -119,6 +121,8 @@ export function RightPanel({ store }: { store: CargoStore }) {
         </div>
       )}
 
+      {plan && <WeightBalance placed={placed} vehicle={vehicle} />}
+
       {/* Placed */}
       <div className="flex-1 flex flex-col overflow-hidden px-4 pt-3">
         <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 mb-2">
@@ -161,7 +165,12 @@ export function RightPanel({ store }: { store: CargoStore }) {
           <Trash2 size={13} className="text-gray-400" />
           {t.right_clear}
         </button>
-        <button className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-gray-300 dark:border-slate-600 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+        <button disabled={!plan} title={plan ? undefined : t.report_need_plan}
+          onClick={() => plan && openReport({
+            projectName: projectName || t.report_title, vehicle, plan, totalUnits: totalItems, t,
+            locale: lang === 'pl' ? 'pl-PL' : lang === 'ru' ? 'ru-RU' : 'en-GB',
+          })}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-gray-300 dark:border-slate-600 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors">
           <FileText size={13} className="text-gray-400" />
           {t.right_report}
         </button>

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, Truck, Package, Cpu, BarChart2, Settings, LogOut, Crown, Home } from 'lucide-react';
+import { FolderOpen, Cpu, Settings, LogOut, Crown, Home } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 
@@ -20,10 +20,7 @@ export function NavSidebar({ activeTab, onTabChange }: Props) {
   const NAV = [
     { id: 'home',         label: t.nav_home,         icon: Home },
     { id: 'projects',     label: t.nav_projects,     icon: FolderOpen },
-    { id: 'transport',    label: t.nav_transport,     icon: Truck },
-    { id: 'cargo',        label: t.nav_cargo,         icon: Package },
     { id: 'optimization', label: t.nav_optimization,  icon: Cpu },
-    { id: 'results',      label: t.nav_results,       icon: BarChart2 },
   ];
 
   return (

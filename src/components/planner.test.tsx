@@ -40,6 +40,17 @@ describe('planner panels', () => {
     expect((screen.getByRole('button', { name: /Rozmieść ładunek/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('shows the weight distribution and enables the report once a plan exists', async () => {
+    setup();
+    const report = () => screen.getByRole('button', { name: /Generuj raport/ }) as HTMLButtonElement;
+    expect(report().disabled).toBe(true);
+    expect(screen.queryByText('Rozkład masy')).toBeNull();
+    await compute();
+    expect(screen.getByText('Rozkład masy')).toBeTruthy();
+    expect(screen.getByText(/Środek ciężkości od kabiny/)).toBeTruthy();
+    expect(report().disabled).toBe(false);
+  });
+
   it('computes a plan for the sample cargo and shows the verifier result', async () => {
     setup();
     await compute();

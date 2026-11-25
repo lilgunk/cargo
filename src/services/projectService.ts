@@ -21,7 +21,50 @@ export interface SavedProject {
   plan: (PackingResult & Pick<PlanResult, 'sortBy' | 'positions' | 'variantsTried'>) | null;
 }
 
+/** One row of the project list — read without the (possibly large) saved plan. */
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  savedAt: string;
+  vehicleName: string;
+  units: number;       // cargo units in the project
+  planned: boolean;    // a computed plan was saved with it
+}
+
+interface SummaryRow {
+  id: string; name: string; saved_at: string;
+  vehicle: string | null; cargo: { quantity?: number }[] | null; plan: unknown;
+}
+
 export const projectService = {
+  /** The signed-in user's projects, newest first (JSON paths keep the response small). */
+  async list(): Promise<ProjectSummary[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, saved_at, vehicle:data->vehicle->>name, cargo:data->cargoItems, plan:data->plan->unplaced')
+      .order('saved_at', { ascending: false });
+    if (error) throw error;
+    return ((data ?? []) as unknown as SummaryRow[]).map(r => ({
+      id: r.id,
+      name: r.name,
+      savedAt: r.saved_at,
+      vehicleName: r.vehicle ?? '',
+      units: (r.cargo ?? []).reduce((s, c) => s + (Number(c.quantity) || 0), 0),
+      planned: r.plan != null,
+    }));
+  },
+
+  async get(id: string): Promise<SavedProject | undefined> {
+    const { data, error } = await supabase.from('projects').select('data').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return (data?.data as SavedProject | undefined) ?? undefined;
+  },
+
+  async remove(id: string): Promise<void> {
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   /** The signed-in user's most recently saved project. */
   async latest(): Promise<SavedProject | undefined> {
     const { data, error } = await supabase
@@ -56,6 +99,61 @@ export function buildProject(id: string, name: string, vehicle: Vehicle, cargoIt
     vehicle,
     cargoItems,
     plan: plan && { placed: plan.placed, unplaced: plan.unplaced, sortBy: plan.sortBy, positions: plan.positions, variantsTried: plan.variantsTried },
+  };
+}
+
+// ── import (.loadopti.json) ──────────────────────────────────────────────────
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const positive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+const nonNegative = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const ROTATIONS = ['none', 'horizontal', 'any'];
+
+/**
+ * Reads an exported project file. Throws on anything that is not a LoadOpti
+ * project; a stored plan with malformed units is dropped (it can be recomputed),
+ * and a valid one is re-checked by the verifier when the project is opened.
+ */
+export function parseProject(text: string): SavedProject {
+  let raw: unknown;
+  try { raw = JSON.parse(text); } catch { throw new Error('not json'); }
+  if (!isObj(raw) || raw.format !== PROJECT_FORMAT || raw.version !== PROJECT_VERSION) throw new Error('not a project');
+
+  const v = raw.vehicle;
+  if (!isObj(v) || typeof v.id !== 'string' || typeof v.name !== 'string'
+    || ![v.length, v.width, v.height, v.maxWeight].every(positive)) throw new Error('bad vehicle');
+  const vehicle = { ...v, wheelArches: Array.isArray(v.wheelArches) ? v.wheelArches : [] } as Vehicle;
+
+  if (!Array.isArray(raw.cargoItems)) throw new Error('bad cargo');
+  const cargoItems: CargoItem[] = raw.cargoItems.map((c: unknown) => {
+    if (!isObj(c) || typeof c.id !== 'string' || ![c.length, c.width, c.height, c.weight, c.quantity].every(positive)
+      || !Number.isInteger(c.quantity) || !ROTATIONS.includes(c.rotation as string)) throw new Error('bad cargo item');
+    return {
+      ...c,
+      name: typeof c.name === 'string' ? c.name.slice(0, 60) : '',
+      color: typeof c.color === 'string' && /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : '#818cf8',
+      stackable: c.stackable !== false,
+      floorOnly: c.floorOnly === true,
+    } as CargoItem;
+  });
+
+  let plan: SavedProject['plan'] = null;
+  const p = raw.plan;
+  if (isObj(p) && Array.isArray(p.placed) && Array.isArray(p.unplaced)
+    && p.placed.every(u => isObj(u) && typeof u.cargoId === 'string'
+      && [u.x, u.y, u.z, u.weight].every(nonNegative) && [u.length, u.width, u.height].every(positive))) {
+    plan = p as unknown as SavedProject['plan'];
+  }
+
+  return {
+    format: PROJECT_FORMAT,
+    version: PROJECT_VERSION,
+    id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
+    name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 120) : 'Projekt',
+    savedAt: typeof raw.savedAt === 'string' ? raw.savedAt : new Date().toISOString(),
+    vehicle,
+    cargoItems,
+    plan,
   };
 }
 
