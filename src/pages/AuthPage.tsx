@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthFailure, useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import type { Lang } from '../i18n/translations';
-import { Eye, EyeOff, Mail, Lock, User, Truck, MailCheck } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, MailCheck } from 'lucide-react';
 
 type Mode = 'login' | 'register' | 'forgot';
 type Notice = { kind: 'confirm' | 'reset'; email: string } | null;
@@ -91,15 +91,8 @@ export default function AuthPage() {
         </div>
 
         {/* Logo */}
-        <div className="flex items-center gap-2.5 mb-10">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-            <Truck size={18} className="text-white" />
-          </div>
-          <div>
-            <div className="font-bold text-gray-900 text-base leading-tight">LoadOpti</div>
-            <div className="text-[10px] text-gray-400 leading-tight">Cargo Planner</div>
-          </div>
-        </div>
+        <img src="/brand/nastyk-logo.webp" alt="NaStyk" width={2000} height={667}
+          className="h-20 w-auto self-start mb-8 select-none" draggable={false} />
 
         {notice ? (
           <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-6" role="status">
