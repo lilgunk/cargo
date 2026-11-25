@@ -7,6 +7,8 @@ import type { CargoItem, PackingResult, Vehicle } from '../types';
 import type { PlanResult } from '../hooks/useCargoStore';
 import { supabase } from '../lib/supabase';
 
+// Format id written into exported files. Kept from the app's first name (LoadOpti) so
+// files exported earlier can still be imported.
 export const PROJECT_FORMAT = 'loadopti-project';
 export const PROJECT_VERSION = 1;
 
@@ -102,7 +104,7 @@ export function buildProject(id: string, name: string, vehicle: Vehicle, cargoIt
   };
 }
 
-// ── import (.loadopti.json) ──────────────────────────────────────────────────
+// ── import (.nastyk.json) ──────────────────────────────────────────────────
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const positive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
@@ -110,7 +112,7 @@ const nonNegative = (v: unknown): v is number => typeof v === 'number' && Number
 const ROTATIONS = ['none', 'horizontal', 'any'];
 
 /**
- * Reads an exported project file. Throws on anything that is not a LoadOpti
+ * Reads an exported project file. Throws on anything that is not a NaStyk
  * project; a stored plan with malformed units is dropped (it can be recomputed),
  * and a valid one is re-checked by the verifier when the project is opened.
  */

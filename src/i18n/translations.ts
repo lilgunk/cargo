@@ -14,7 +14,7 @@ const ru = {
   dash_recent: 'Последние проекты', dash_all: 'Все проекты',
   dash_quick: 'Быстрая оптимизация',
   dash_quick_sub: 'Создайте новую оптимизацию за несколько шагов',
-  dash_drag: 'Перетащите файл проекта (.loadopti.json)', dash_or_file: 'или выберите файл',
+  dash_drag: 'Перетащите файл проекта (.nastyk.json)', dash_or_file: 'или выберите файл',
   dash_create_opt: 'Создать оптимизацию', dash_3d: '3D превью', dash_soon: 'скоро',
 
   // Modal
@@ -58,7 +58,7 @@ const ru = {
   projects_open: 'Открыть', projects_delete: 'Удалить проект', projects_confirm_delete: 'Удалить проект «{name}»? Это нельзя отменить.',
   projects_planned: 'с планом', projects_not_planned: 'без плана', projects_current: 'открыт',
   projects_load_error: 'Не удалось загрузить проекты. Проверьте интернет.', projects_import: 'Импорт из файла',
-  import_error: 'Это не файл проекта LoadOpti (.loadopti.json).',
+  import_error: 'Это не файл проекта NaStyk (.nastyk.json).',
   left_err_never_fits: 'Не поместится ни в одном разрешённом положении',
   left_pallet_type: 'Тип паллеты', left_pallet_eur: 'EUR', left_pallet_half: 'EUR ½', left_pallet_industrial: 'промышленная',
   left_pallet_height: 'Высота с паллетой (мм)', left_pallet_note: 'Паллета ставится только на пол, можно развернуть на 90°.',
@@ -146,7 +146,7 @@ const pl: typeof ru = {
   dash_recent: 'Ostatnie projekty', dash_all: 'Wszystkie projekty',
   dash_quick: 'Szybka optymalizacja',
   dash_quick_sub: 'Utwórz nową optymalizację załadunku w kilku krokach',
-  dash_drag: 'Przeciągnij plik projektu (.loadopti.json)', dash_or_file: 'lub wybierz plik',
+  dash_drag: 'Przeciągnij plik projektu (.nastyk.json)', dash_or_file: 'lub wybierz plik',
   dash_create_opt: 'Utwórz optymalizację', dash_3d: 'Podgląd 3D', dash_soon: 'wkrótce',
 
   modal_title: 'Nowy projekt', modal_name: 'Nazwa projektu',
@@ -187,7 +187,7 @@ const pl: typeof ru = {
   projects_open: 'Otwórz', projects_delete: 'Usuń projekt', projects_confirm_delete: 'Usunąć projekt „{name}”? Tej operacji nie można cofnąć.',
   projects_planned: 'z planem', projects_not_planned: 'bez planu', projects_current: 'otwarty',
   projects_load_error: 'Nie udało się wczytać projektów. Sprawdź połączenie z internetem.', projects_import: 'Importuj z pliku',
-  import_error: 'To nie jest plik projektu LoadOpti (.loadopti.json).',
+  import_error: 'To nie jest plik projektu NaStyk (.nastyk.json).',
   left_err_never_fits: 'Nie zmieści się w żadnej dozwolonej orientacji',
   left_pallet_type: 'Rodzaj palety', left_pallet_eur: 'EUR', left_pallet_half: 'EUR ½', left_pallet_industrial: 'przemysłowa',
   left_pallet_height: 'Wysokość z paletą (mm)', left_pallet_note: 'Paleta stoi tylko na podłodze, można ją obrócić o 90°.',
@@ -272,7 +272,7 @@ const en: typeof ru = {
   dash_recent: 'Recent projects', dash_all: 'All projects',
   dash_quick: 'Quick optimization',
   dash_quick_sub: 'Create a new load optimization in a few steps',
-  dash_drag: 'Drop a project file (.loadopti.json)', dash_or_file: 'or choose a file',
+  dash_drag: 'Drop a project file (.nastyk.json)', dash_or_file: 'or choose a file',
   dash_create_opt: 'Create optimization', dash_3d: '3D preview', dash_soon: 'soon',
 
   modal_title: 'New project', modal_name: 'Project name',
@@ -313,7 +313,7 @@ const en: typeof ru = {
   projects_open: 'Open', projects_delete: 'Delete project', projects_confirm_delete: 'Delete project “{name}”? This cannot be undone.',
   projects_planned: 'with plan', projects_not_planned: 'no plan', projects_current: 'open',
   projects_load_error: 'Could not load projects. Check your internet connection.', projects_import: 'Import from file',
-  import_error: 'This is not a LoadOpti project file (.loadopti.json).',
+  import_error: 'This is not a NaStyk project file (.nastyk.json).',
   left_err_never_fits: 'Does not fit in any allowed orientation',
   left_pallet_type: 'Pallet type', left_pallet_eur: 'EUR', left_pallet_half: 'EUR ½', left_pallet_industrial: 'industrial',
   left_pallet_height: 'Height incl. pallet (mm)', left_pallet_note: 'A pallet stands on the floor only and may be turned 90°.',

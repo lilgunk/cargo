@@ -1,4 +1,4 @@
--- LoadOpti — users, roles and saved projects (Supabase / PostgreSQL).
+-- NaStyk — users, roles and saved projects (Supabase / PostgreSQL).
 -- Run once in the Supabase SQL editor (or `supabase db push`).
 --
 -- Security model:

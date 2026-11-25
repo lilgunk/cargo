@@ -3,7 +3,7 @@ import type { DragEvent } from 'react';
 import { FileUp } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 
-/** Drop zone + file picker for an exported project (.loadopti.json). */
+/** Drop zone + file picker for an exported project (.nastyk.json; older .loadopti.json files work too). */
 export function ImportDrop({ onImport }: { onImport: (text: string) => boolean }) {
   const { t } = useSettings();
   const input = useRef<HTMLInputElement>(null);

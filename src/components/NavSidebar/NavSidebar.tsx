@@ -33,7 +33,7 @@ export function NavSidebar({ activeTab, onTabChange }: Props) {
           </svg>
         </div>
         <div>
-          <div className="text-sm font-bold text-slate-100 leading-tight">LoadOpti</div>
+          <div className="text-sm font-bold text-slate-100 leading-tight">NaStyk</div>
           <div className="text-[10px] text-slate-500 leading-tight">Cargo Planner</div>
         </div>
       </div>

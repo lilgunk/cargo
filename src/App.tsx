@@ -122,7 +122,7 @@ function CargoApp() {
 
   function handleExportJson() {
     const project = buildProject(projectId, name, store.vehicle, store.cargoItems, store.plan);
-    download(`${slugify(name)}.loadopti.json`, JSON.stringify(project, null, 2), 'application/json');
+    download(`${slugify(name)}.nastyk.json`, JSON.stringify(project, null, 2), 'application/json');
   }
 
   function handleExportCsv() {

@@ -1,4 +1,4 @@
-# LoadOpti — Cargo Planner
+# NaStyk — planowanie załadunku
 
 Aplikacja wspomagająca planowanie załadunku pojazdów dostawczych (praca inżynierska).
 
