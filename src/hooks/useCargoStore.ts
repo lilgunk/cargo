@@ -88,8 +88,10 @@ export function useCargoStore(initialCargo: CargoItem[] = []) {
   }
 
   /** Computes the plan (in a Web Worker in the browser). */
-  async function optimize() {
-    setPlan(await computePlan(cargoItems, vehicle, DEFAULT_SUPPORT_RATIO));
+  async function optimize(): Promise<PlanResult> {
+    const p = await computePlan(cargoItems, vehicle, DEFAULT_SUPPORT_RATIO);
+    setPlan(p);
+    return p;
   }
 
   const placed   = plan?.placed ?? [];

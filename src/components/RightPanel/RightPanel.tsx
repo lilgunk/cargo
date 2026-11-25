@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { MoreVertical, Trash2, FileText, Zap, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { MoreVertical, Trash2, FileText, Zap, ShieldCheck, ShieldAlert, AlertTriangle, ChevronRight } from 'lucide-react';
 import type { CargoStore } from '../../hooks/useCargoStore';
 import { useSettings } from '../../contexts/SettingsContext';
 import { MAX_UNITS } from '../../algorithm/packCargo';
 import { WeightBalance } from '../WeightBalance/WeightBalance';
-import { UnplacedList } from '../UnplacedList/UnplacedList';
+import { UnplacedDialog } from '../UnplacedDialog/UnplacedDialog';
 import { openReport } from '../../services/reportService';
 
 export function RightPanel({ store, projectName }: { store: CargoStore; projectName?: string }) {
   const { t, lang } = useSettings();
   const [optimizing, setOptimizing] = useState(false);
+  const [showUnplaced, setShowUnplaced] = useState(false);
   const { occupancy, usedVolume, maxVolume, placedWeight, totalItems, freeVolume, vehicle, cargoItems, placed, unplaced, plan } = store;
 
   const tooMany = totalItems > MAX_UNITS; // e.g. a project saved before the limit existed
@@ -17,7 +18,8 @@ export function RightPanel({ store, projectName }: { store: CargoStore; projectN
   function handleOptimize() {
     setOptimizing(true);
     // computed in a Web Worker — the UI stays responsive, the spinner keeps turning
-    void store.optimize().finally(() => setOptimizing(false));
+    // whatever did not fit is shown in a pop-up right away
+    void store.optimize().then(p => setShowUnplaced(p.unplaced.length > 0)).finally(() => setOptimizing(false));
   }
 
   // Status comes from the independent verifier, never from a guess about "optimality".
@@ -87,13 +89,18 @@ export function RightPanel({ store, projectName }: { store: CargoStore; projectN
 
       {/* Did not fit */}
       {plan && (
-        <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0 max-h-72 overflow-y-auto">
+        <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-slate-700 flex-shrink-0 flex-shrink-0">
           {unplaced.length === 0 ? (
             <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
               <ShieldCheck size={14} /> {t.right_all_placed}
             </div>
           ) : (
-            <UnplacedList unplaced={unplaced} cargoItems={cargoItems} />
+            <button onClick={() => setShowUnplaced(true)}
+              className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 text-left hover:bg-amber-100/70 dark:hover:bg-amber-900/20 transition-colors">
+              <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <span className="flex-1 text-xs font-medium text-amber-800 dark:text-amber-300">{t.right_unplaced}: {unplaced.length} {t.unit_pcs}</span>
+              <span className="flex items-center text-[11px] text-amber-700 dark:text-amber-400">{t.unplaced_details}<ChevronRight size={12} /></span>
+            </button>
           )}
         </div>
       )}
@@ -153,6 +160,9 @@ export function RightPanel({ store, projectName }: { store: CargoStore; projectN
           {t.right_report}
         </button>
       </div>
+      {showUnplaced && unplaced.length > 0 && (
+        <UnplacedDialog unplaced={unplaced} cargoItems={cargoItems} onClose={() => setShowUnplaced(false)} />
+      )}
     </aside>
   );
 }
